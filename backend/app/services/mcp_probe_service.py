@@ -167,7 +167,10 @@ async def probe_mcp_endpoint(
                 status_code=notif_resp.status_code,
                 ok=notif_ok,
                 duration_ms=elapsed,
-                detail=f"HTTP {notif_resp.status_code}" + (" (accepted)" if notif_ok and notif_resp.status_code == 202 else ""),
+                detail=(
+                    f"HTTP {notif_resp.status_code}"
+                    + (" (accepted)" if notif_ok and notif_resp.status_code == 202 else "")
+                ),
             )
         )
 
@@ -203,7 +206,10 @@ async def probe_mcp_endpoint(
             tools_body = tools_resp.json()
         except json.JSONDecodeError:
             steps.append(
-                _step(step_name, status_code=200, ok=False, duration_ms=elapsed, detail="invalid JSON")
+                _step(
+                    step_name, status_code=200, ok=False,
+                    duration_ms=elapsed, detail="invalid JSON",
+                )
             )
             result.error = "tools/list: response is not valid JSON"
             result.steps = steps
@@ -252,7 +258,10 @@ async def probe_mcp_endpoint(
         return result
 
 
-def _step(method: str, *, ok: bool, duration_ms: int, detail: str, status_code: int | None = None) -> McpProbeStep:
+def _step(
+    method: str, *, ok: bool, duration_ms: int, detail: str,
+    status_code: int | None = None,
+) -> McpProbeStep:
     return McpProbeStep(
         method=method,
         status_code=status_code,

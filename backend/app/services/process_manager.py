@@ -191,14 +191,13 @@ class ProcessManager:
 
         try:
             # Étape 1: Get-NetTCPConnection pour trouver l'OwningProcess
+            ps_cmd = (
+                f"Get-NetTCPConnection -LocalAddress 127.0.0.1 "
+                f"-LocalPort {port} -State Listen | "
+                "Select-Object -First 1 | Format-List OwningProcess"
+            )
             result = subprocess.run(
-                [
-                    "powershell",
-                    "-NoProfile",
-                    "-Command",
-                    f"Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort {port} -State Listen | "
-                    "Select-Object -First 1 | Format-List OwningProcess",
-                ],
+                ["powershell", "-NoProfile", "-Command", ps_cmd],
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -275,7 +274,10 @@ class ProcessManager:
                 )
                 cmdline = result2.stdout or ""
             if _MCP_PROXY_WANTED.search(cmdline):
-                logger.info("Port %d – mcp-proxy compatible détecté (PID %s), réutilisation.", port, pid)
+                logger.info(
+                    "Port %d – mcp-proxy compatible détecté (PID %s), réutilisation.",
+                    port, pid,
+                )
                 return True
             return False
         except (subprocess.TimeoutExpired, FileNotFoundError):

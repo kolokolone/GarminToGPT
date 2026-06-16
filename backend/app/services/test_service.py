@@ -259,27 +259,41 @@ class TestService:
                 loop = asyncio.get_event_loop()
             except RuntimeError:
                 # Thread AnyIO sans boucle – asyncio.run lève la sienne
+                timeout = self.settings.timeouts.healthcheck_seconds
                 probe = asyncio.run(
-                    probe_mcp_endpoint(base_url, timeout_seconds=self.settings.timeouts.healthcheck_seconds),
+                    probe_mcp_endpoint(base_url, timeout_seconds=timeout),
                 )
             else:
                 if loop.is_running():
+                    timeout = self.settings.timeouts.healthcheck_seconds
                     future = asyncio.run_coroutine_threadsafe(
-                        probe_mcp_endpoint(base_url, timeout_seconds=self.settings.timeouts.healthcheck_seconds),
+                        probe_mcp_endpoint(base_url, timeout_seconds=timeout),
                         loop,
                     )
-                    probe = future.result(timeout=self.settings.timeouts.healthcheck_seconds + 5)
+                    probe = future.result(timeout=timeout + 5)
                 else:
+                    timeout = self.settings.timeouts.healthcheck_seconds
                     probe = asyncio.run(
-                        probe_mcp_endpoint(base_url, timeout_seconds=self.settings.timeouts.healthcheck_seconds),
+                        probe_mcp_endpoint(base_url, timeout_seconds=timeout),
                     )
         except Exception as exc:
             return False, f"Probe distant échoué: {exc}", "Vérifie tunnel et MCP."
         if probe.ok:
-            return True, f"MCP distant OK – {probe.tools_count} outil(s), serveur {probe.server_name or 'inconnu'}.", None
+            msg = (
+                f"MCP distant OK – {probe.tools_count} outil(s), "
+                f"serveur {probe.server_name or 'inconnu'}."
+            )
+            return True, msg, None
         if probe.error and "530" in str(probe.error):
-            return False, probe.error, "Démarre le service MCP local puis régénère le tunnel Cloudflare."
-        return False, probe.error or "Probe MCP distant a échoué.", "Vérifie l'état du tunnel et du service MCP."
+            return (
+                False, probe.error,
+                "Démarre le service MCP local puis régénère le tunnel Cloudflare.",
+            )
+        return (
+            False,
+            probe.error or "Probe MCP distant a échoué.",
+            "Vérifie l'état du tunnel et du service MCP.",
+        )
 
     def _check_chatgpt_url(self) -> tuple[bool, str, str | None]:
         url = self.tunnel.get_chatgpt_mcp_url()

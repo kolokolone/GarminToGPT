@@ -76,7 +76,10 @@ class McpService:
         return HealthcheckResult(
             ok=True,
             target=self.local_url,
-            message=f"MCP OK – {probe.tools_count} outil(s), serveur {probe.server_name or 'inconnu'}",
+            message=(
+                f"MCP OK – {probe.tools_count} outil(s), "
+                f"serveur {probe.server_name or 'inconnu'}"
+            ),
         )
 
     def list_mcp_tools(self) -> McpToolsResult:
