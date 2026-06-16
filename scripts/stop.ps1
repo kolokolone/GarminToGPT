@@ -17,14 +17,26 @@ function Stop-RecordedProcess($PidFile) {
     Remove-Item -LiteralPath $PidFile -Force
 }
 
-Stop-RecordedProcess (Join-Path $Runtime "backend.pid")
-Stop-RecordedProcess (Join-Path $Runtime "frontend.pid")
-
+# 1) Tunnel Cloudflare en premier – arrêter l'exposition publique
 try {
-    Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/mcp/stop" -TimeoutSec 2 | Out-Null
     Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/tunnel/stop" -TimeoutSec 2 | Out-Null
+    "Tunnel Cloudflare arrêté via API."
 } catch {
     "API backend indisponible ou déjà arrêtée."
 }
+
+# 2) Service MCP (proxy + garmin-mcp)
+try {
+    Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/mcp/stop" -TimeoutSec 2 | Out-Null
+    "Service MCP arrêté via API."
+} catch {
+    "API backend indisponible ou déjà arrêtée."
+}
+
+# 3) Frontend
+Stop-RecordedProcess (Join-Path $Runtime "frontend.pid")
+
+# 4) Backend (en dernier)
+Stop-RecordedProcess (Join-Path $Runtime "backend.pid")
 
 "Arrêt terminé."

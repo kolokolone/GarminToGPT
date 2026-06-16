@@ -2,11 +2,10 @@ import shutil
 import time
 from collections.abc import Callable
 
-import httpx
-
 from app.core.config import Settings
 from app.models.tests import TestDefinition, TestListResult, TestResult, TestRunAllResult
 from app.services.garmin_auth_service import GarminAuthService
+from app.services.mcp_probe_service import probe_mcp_endpoint
 from app.services.mcp_service import McpService
 from app.services.tunnel_service import TunnelService
 from app.utils.ports import is_port_open
@@ -250,15 +249,37 @@ class TestService:
         url = self.tunnel.get_chatgpt_mcp_url()
         if not url:
             return False, "Aucune URL /mcp publique.", "Allume le tunnel."
+        if not url.startswith("https://"):
+            return False, "L'URL publique doit être HTTPS.", "Vérifie la configuration du tunnel."
+        # Probe MCP réel sur l'URL distante (sans session, juste initialize)
+        base_url = url.replace("/mcp", "")
+        import asyncio
         try:
-            response = httpx.get(url, timeout=self.settings.timeouts.healthcheck_seconds)
-        except httpx.RequestError as exc:
-            return False, f"Endpoint distant inaccessible: {exc}", "Vérifie tunnel et MCP."
-        ok = response.status_code < 500
-        suggestion = None
-        if not ok and response.status_code in {530, 1033}:
-            suggestion = "Démarre le service MCP local puis régénère le tunnel Cloudflare."
-        return ok, f"Statut HTTP {response.status_code}.", suggestion
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # Thread AnyIO sans boucle – asyncio.run lève la sienne
+                probe = asyncio.run(
+                    probe_mcp_endpoint(base_url, timeout_seconds=self.settings.timeouts.healthcheck_seconds),
+                )
+            else:
+                if loop.is_running():
+                    future = asyncio.run_coroutine_threadsafe(
+                        probe_mcp_endpoint(base_url, timeout_seconds=self.settings.timeouts.healthcheck_seconds),
+                        loop,
+                    )
+                    probe = future.result(timeout=self.settings.timeouts.healthcheck_seconds + 5)
+                else:
+                    probe = asyncio.run(
+                        probe_mcp_endpoint(base_url, timeout_seconds=self.settings.timeouts.healthcheck_seconds),
+                    )
+        except Exception as exc:
+            return False, f"Probe distant échoué: {exc}", "Vérifie tunnel et MCP."
+        if probe.ok:
+            return True, f"MCP distant OK – {probe.tools_count} outil(s), serveur {probe.server_name or 'inconnu'}.", None
+        if probe.error and "530" in str(probe.error):
+            return False, probe.error, "Démarre le service MCP local puis régénère le tunnel Cloudflare."
+        return False, probe.error or "Probe MCP distant a échoué.", "Vérifie l'état du tunnel et du service MCP."
 
     def _check_chatgpt_url(self) -> tuple[bool, str, str | None]:
         url = self.tunnel.get_chatgpt_mcp_url()
