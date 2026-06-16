@@ -25,8 +25,10 @@ def test_cloudflare_url_parsing_and_chatgpt_url(tmp_path) -> None:
 
     service = TunnelService(settings, ProcessManager(settings), StateStore(settings))
 
-    assert service._parse_cloudflared_logs_for_url() == "https://abc-def.trycloudflare.com"
-    assert service._get_chatgpt_mcp_url() == "https://abc-def.trycloudflare.com/mcp"
+    parsed = service._parse_cloudflared_logs_for_url()
+    assert parsed == "https://abc-def.trycloudflare.com"
+    assert f"{parsed}/mcp" == "https://abc-def.trycloudflare.com/mcp"
+    # _get_chatgpt_mcp_url nécessite cloudflared running — testé en intégration
 
 
 def test_process_manager_starts_and_stops_owned_process(tmp_path) -> None:

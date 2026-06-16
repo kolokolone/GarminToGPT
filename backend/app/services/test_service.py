@@ -238,7 +238,7 @@ class TestService:
         return status.state == "running", status.process.message, "Allume le tunnel."
 
     def _check_tunnel_url(self) -> tuple[bool, str, str | None]:
-        url = self.tunnel.get_public_url()
+        url = self.tunnel._get_public_url()
         return (
             bool(url),
             url or "Aucune URL publique.",
@@ -246,7 +246,7 @@ class TestService:
         )
 
     def _check_remote_endpoint(self) -> tuple[bool, str, str | None]:
-        url = self.tunnel.get_chatgpt_mcp_url()
+        url = self.tunnel._get_chatgpt_mcp_url()
         if not url:
             return False, "Aucune URL /mcp publique.", "Allume le tunnel."
         if not url.startswith("https://"):
@@ -296,7 +296,7 @@ class TestService:
         )
 
     def _check_chatgpt_url(self) -> tuple[bool, str, str | None]:
-        url = self.tunnel.get_chatgpt_mcp_url()
+        url = self.tunnel._get_chatgpt_mcp_url()
         ok = bool(url and url.startswith("https://") and url.endswith(self.settings.mcp.endpoint))
         return ok, url or "URL absente.", "Le tunnel doit fournir une URL HTTPS terminée par /mcp."
 
