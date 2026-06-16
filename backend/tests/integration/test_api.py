@@ -33,7 +33,7 @@ def _write_config(tmp_path: Path) -> Path:
     content = f"""
 app:
   name: GarminToGPT
-  version: 0.1.0
+  version: 0.2.0
   environment: test
 server:
   host: 127.0.0.1

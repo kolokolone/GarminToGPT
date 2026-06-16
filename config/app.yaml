@@ -1,6 +1,6 @@
 app:
   name: GarminToGPT
-  version: 0.1.0
+  version: 0.2.0
   environment: local
 
 server:
@@ -51,7 +51,7 @@ garmin:
     - git+https://github.com/Taxuspt/garmin_mcp
     - garmin-mcp-auth
     - --verify
-  token_dir: "%USERPROFILE%\\.garminconnect"
+  token_dir: "~/.garminconnect"
 
 cloudflare:
   mode: quick

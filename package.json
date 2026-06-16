@@ -1,7 +1,7 @@
 {
   "name": "garmin-to-gpt-workspace",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "scripts": {
     "backend:dev": "uv run uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --reload",
     "backend:test": "uv run pytest",
