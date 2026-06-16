@@ -1,0 +1,11 @@
+{
+  "include": ["backend/app"],
+  "executionEnvironments": [
+    {
+      "root": "backend",
+      "extraPaths": ["backend"]
+    }
+  ],
+  "typeCheckingMode": "basic",
+  "reportImplicitRelativeImport": "none"
+}

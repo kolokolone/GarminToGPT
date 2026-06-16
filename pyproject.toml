@@ -1,0 +1,29 @@
+[project]
+name = "garmin-to-gpt"
+version = "0.1.0"
+description = "Local Garmin MCP bridge for ChatGPT via Cloudflare Tunnel"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.116.0",
+    "httpx>=0.28.0",
+    "pydantic>=2.11.0",
+    "pyyaml>=6.0.0",
+    "uvicorn[standard]>=0.35.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.0",
+    "ruff>=0.14.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["backend/tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
