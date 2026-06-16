@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter
 
 from app.models.common import ServiceActionResult
@@ -30,3 +32,9 @@ def restart() -> ServiceActionResult:
 @router.get("/tools", response_model=McpToolsResult)
 def tools() -> McpToolsResult:
     return get_container().mcp.list_mcp_tools()
+
+
+@router.get("/raw-tools")
+def raw_tools() -> list[dict[str, Any]]:
+    """Retourne la liste brute des outils MCP (nom, description, input_schema)."""
+    return get_container().mcp.get_raw_tools()

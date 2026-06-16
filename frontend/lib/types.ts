@@ -100,3 +100,21 @@ export interface TestResult {
   message: string;
   suggestion: string | null;
 }
+
+export interface McpTool {
+  name: string;
+  risk: "read" | "write" | "unknown";
+  reason: string;
+}
+
+export interface McpToolsResult {
+  ok: boolean;
+  message: string;
+  tools: McpTool[];
+}
+
+export interface McpToolClassification {
+  read_tools: string[];
+  write_tools: string[];
+  unknown_tools: string[];
+}
