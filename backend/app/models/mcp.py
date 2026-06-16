@@ -37,3 +37,25 @@ class McpToolClassification(BaseModel):
 
 class McpActionResult(ServiceActionResult):
     pass
+
+
+class McpProbeStep(BaseModel):
+    method: str
+    status_code: int | None = None
+    ok: bool
+    duration_ms: int
+    detail: str
+
+
+class McpProbeResult(BaseModel):
+    ok: bool
+    status: str  # "ok" | "error"
+    server_name: str | None = None
+    server_version: str | None = None
+    protocol_version: str | None = None
+    error: str | None = None
+    tools_count: int = 0
+    tools: list[dict] = []
+    session_id: str | None = None
+    steps: list[McpProbeStep] = []
+    final_url: str | None = None
