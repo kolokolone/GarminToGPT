@@ -16,7 +16,7 @@ Le projet doit être pensé pour un développeur full-stack expérimenté, avec 
 
 Nom applicatif : **GarminToGPT**
 
-Nom recommandé du dépôt : `garmin-to-gpt`
+Nom recommandé du dépôt : `garmintogpt`
 
 Dossier de travail local obligatoire :
 
@@ -810,9 +810,9 @@ Créer `docker-compose.yml` :
 
 ```yaml
 services:
-  garmin-to-gpt:
-    image: ghcr.io/OWNER/garmin-to-gpt:latest
-    container_name: garmin-to-gpt
+  garmintogpt:
+    image: ghcr.io/OWNER/garmintogpt:latest
+    container_name: garmintogpt
     ports:
       - "3000:3000"
       - "8000:8000"
@@ -839,8 +839,8 @@ Publier automatiquement l’image Docker sur GitHub Container Registry.
 Images attendues :
 
 ```text
-ghcr.io/<owner>/garmin-to-gpt:latest
-ghcr.io/<owner>/garmin-to-gpt:<version>
+ghcr.io/<owner>/garmintogpt:latest
+ghcr.io/<owner>/garmintogpt:<version>
 ```
 
 Créer `.github/workflows/docker-publish-ghcr.yml`.

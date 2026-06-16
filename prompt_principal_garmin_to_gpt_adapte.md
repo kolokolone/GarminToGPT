@@ -737,8 +737,8 @@ Le CI doit exécuter :
 Le workflow GHCR doit publier :
 
 ```text
-ghcr.io/<owner>/garmin-to-gpt:latest
-ghcr.io/<owner>/garmin-to-gpt:<version>
+ghcr.io/<owner>/garmintogpt:latest
+ghcr.io/<owner>/garmintogpt:<version>
 ```
 
 Déclencheurs :
