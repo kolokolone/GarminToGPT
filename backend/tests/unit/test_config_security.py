@@ -30,7 +30,7 @@ def test_redact_text_masks_sensitive_values() -> None:
 
 def _settings_dict() -> dict[str, object]:
     return {
-        "app": {"name": "GarminToGPT", "version": "0.3.2", "environment": "test"},
+        "app": {"name": "GarminToGPT", "version": "0.3.3", "environment": "test"},
         "server": {"host": "127.0.0.1", "backend_port": 8000, "frontend_port": 3000},
         "mcp": {
             "host": "127.0.0.1",

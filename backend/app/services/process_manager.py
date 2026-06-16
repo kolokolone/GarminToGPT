@@ -183,7 +183,7 @@ class ProcessManager:
         """V1-style detection: vérifie si le processus sur le port est
         un mcp-proxy compatible avec Taxuspt/garmin_mcp."""
         import logging
-        logger = logging.getLogger("garmintogpt.process_manager")
+        logger = logging.getLogger("GarminToGPT.process_manager")
 
         if os.name != "nt":
             # Sur Linux/macOS, on tente de lire /proc/<pid>/cmdline
@@ -249,7 +249,7 @@ class ProcessManager:
     def _is_compatible_mcp_proxy_posix(port: int) -> bool:
         """Fallback POSIX: utilise ss/lsof + /proc/pid/cmdline."""
         import logging
-        logger = logging.getLogger("garmintogpt.process_manager")
+        logger = logging.getLogger("GarminToGPT.process_manager")
         try:
             # Trouver le PID via ss
             result = subprocess.run(

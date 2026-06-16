@@ -16,7 +16,7 @@ import httpx
 
 from app.models.mcp import McpProbeResult, McpProbeStep
 
-logger = logging.getLogger("garmintogpt.probe")
+logger = logging.getLogger("GarminToGPT.probe")
 
 _INITIALIZE_PAYLOAD: dict[str, Any] = {
     "jsonrpc": "2.0",

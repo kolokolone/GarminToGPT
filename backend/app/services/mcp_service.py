@@ -8,7 +8,7 @@ from app.services.healthcheck_service import HealthcheckService
 from app.services.mcp_probe_service import probe_mcp_endpoint
 from app.services.process_manager import ProcessManager
 
-logger = logging.getLogger("garmintogpt.mcp")
+logger = logging.getLogger("GarminToGPT.mcp")
 
 WRITE_PREFIXES = ("add_", "set_", "delete_", "remove_", "upload_", "schedule_", "unschedule_")
 

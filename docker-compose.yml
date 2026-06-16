@@ -1,8 +1,8 @@
 services:
-  garmin-to-gpt:
+  GarminToGPT:
     build: .
-    image: ghcr.io/OWNER/garmin-to-gpt:latest
-    container_name: garmin-to-gpt
+    image: ghcr.io/OWNER/GarminToGPT:latest
+    container_name: GarminToGPT
     ports:
       - "127.0.0.1:8000:8000"
     volumes:
