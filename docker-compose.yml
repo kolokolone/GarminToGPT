@@ -1,0 +1,16 @@
+services:
+  garmin-to-gpt:
+    build: .
+    image: ghcr.io/OWNER/garmin-to-gpt:latest
+    container_name: garmin-to-gpt
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./config:/app/config
+      - ./logs:/app/logs
+      - ./runtime:/app/runtime
+      - ./data/garmin:/home/app/.garminconnect
+    environment:
+      - GARMINTOGPT_ENV=local
+      - GARMINTOGPT_CONFIG=/app/config/app.yaml
+    restart: unless-stopped
