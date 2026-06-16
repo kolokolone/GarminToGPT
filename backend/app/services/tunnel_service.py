@@ -8,7 +8,6 @@ from app.services.state_store import StateStore
 
 URL_PATTERN = re.compile(r"https://[a-zA-Z0-9.-]+\.trycloudflare\.com")
 _START_TS_KEY = "tunnel_start_ts"
-_URL_KEY = "cloudflare_public_url"
 
 
 class TunnelService:
@@ -18,13 +17,15 @@ class TunnelService:
         self.settings = settings
         self.process_manager = process_manager
         self.state = state
+        self._current_url: str | None = None
+        self._session_start_pos: int = 0
+
+    # ------------------------------------------------------------------
+    # Public actions
+    # ------------------------------------------------------------------
 
     def start_tunnel(self) -> TunnelActionResult:
-        # Vider l'URL stockée pour éviter de servir une URL périmée
-        state_data = self.state.read()
-        state_data.pop(_URL_KEY, None)
-        state_data[_START_TS_KEY] = datetime.now(timezone.utc).isoformat()
-        self.state.write(state_data)
+        self._clear_current_url()
 
         if self.settings.cloudflare.mode == "named":
             command = [
@@ -40,27 +41,32 @@ class TunnelService:
                 "--url",
                 self.settings.cloudflare.local_url,
             ]
-        result = self.process_manager.start("cloudflared", command)
-        url = self.get_public_url()
+        result = self.process_manager.start("cloudflared", command, reset_log=True)
+
+        # Enregistrer la position du fichier de log APRÈS start() →
+        # toutes les lignes antérieures (anciennes sessions) sont ignorées
+        self._session_start_pos = self._current_log_size()
+
         return TunnelActionResult(
             ok=result.ok,
             status=result.status,
             message=result.message,
             pid=result.pid,
-            public_url=url,
-            chatgpt_mcp_url=self.get_chatgpt_mcp_url(),
+            public_url=None,
+            chatgpt_mcp_url=None,
         )
 
     def stop_tunnel(self) -> TunnelActionResult:
         result = self.process_manager.stop("cloudflared")
         self.state.set_value("tunnel_paused", False)
+        self._current_url = None
         return TunnelActionResult(
             ok=result.ok,
             status="stopped",
             message=result.message,
             pid=result.pid,
-            public_url=self.get_public_url(),
-            chatgpt_mcp_url=self.get_chatgpt_mcp_url(),
+            public_url=None,
+            chatgpt_mcp_url=None,
         )
 
     def pause_tunnel(self) -> TunnelActionResult:
@@ -70,8 +76,8 @@ class TunnelService:
             ok=result.ok,
             status="paused",
             message="Tunnel mis en pause. L'URL publique n'est plus active.",
-            public_url=self.get_public_url(),
-            chatgpt_mcp_url=self.get_chatgpt_mcp_url(),
+            public_url=None,
+            chatgpt_mcp_url=None,
         )
 
     def resume_tunnel(self) -> TunnelActionResult:
@@ -82,10 +88,14 @@ class TunnelService:
         self.stop_tunnel()
         return self.start_tunnel()
 
+    # ------------------------------------------------------------------
+    # Status / URL readout
+    # ------------------------------------------------------------------
+
     def get_tunnel_status(self) -> TunnelStatus:
         process = self.process_manager.status("cloudflared")
         paused = bool(self.state.read().get("tunnel_paused"))
-        public_url = self.get_public_url()
+        public_url = self._get_public_url()
         state = "paused" if paused else process.status
         if state == "unhealthy":
             state = "error"
@@ -95,98 +105,82 @@ class TunnelService:
             state=state,
             mode=self.settings.cloudflare.mode,
             public_url=public_url,
-            chatgpt_mcp_url=self.get_chatgpt_mcp_url(),
+            chatgpt_mcp_url=self._get_chatgpt_mcp_url(),
             pid=process.pid,
-            last_event=self.detect_cloudflare_error() or process.message,
+            last_event=self._detect_cloudflare_error() or process.message,
             process=process,
         )
 
-    def get_public_url(self) -> str | None:
+    def get_url_result(self) -> TunnelUrlResult:
+        public_url = self._get_public_url()
+        return TunnelUrlResult(
+            public_url=public_url,
+            chatgpt_mcp_url=self._get_chatgpt_mcp_url(),
+            message="URL Cloudflare active." if public_url else "Aucune URL Cloudflare détectée.",
+        )
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _clear_current_url(self) -> None:
+        """Reset cached URL and mark a new session start in state."""
+        self._current_url = None
+        self._session_start_pos = 0
+        state_data = self.state.read()
+        state_data.pop("cloudflare_public_url", None)
+        state_data[_START_TS_KEY] = datetime.now(timezone.utc).isoformat()  # noqa: UP017 – Python <3.11
+        self.state.write(state_data)
+
+    def _get_public_url(self) -> str | None:
+        # Cache chaud : déjà trouvée dans cette session
+        if self._current_url:
+            return self._current_url
+
+        # Mode nommé : toujours utiliser le hostname configuré
         if self.settings.cloudflare.mode == "named" and self.settings.cloudflare.hostname:
-            return f"https://{self.settings.cloudflare.hostname}".rstrip("/")
-        url = self.parse_cloudflared_logs_for_url()
-        if url:
-            self.state.set_value(_URL_KEY, url)
+            url = f"https://{self.settings.cloudflare.hostname}".rstrip("/")
+            self._current_url = url
             return url
-        # Fallback state UNIQUEMENT si l'URL a été écrite APRÈS le dernier démarrage
-        state = self.state.read()
-        value = state.get(_URL_KEY)
-        start_ts = state.get(_START_TS_KEY)
-        if value and start_ts:
-            stored_ts = datetime.fromisoformat(start_ts)
-            written_ts = _state_modified_ts(self.state.path)
-            if written_ts and written_ts < stored_ts:
-                return None  # URL écrite avant le dernier démarrage → périmée
-            return str(value)
-        return None
 
-    def get_chatgpt_mcp_url(self) -> str | None:
-        public_url = self.get_public_url()
+        # Mode quick : ne retourner une URL que si cloudflared tourne
+        proc = self.process_manager.status("cloudflared")
+        if proc.status != "running":
+            return None
+
+        url = self._parse_cloudflared_logs_for_url()
+        if url:
+            self._current_url = url
+            self.state.set_value("cloudflare_public_url", url)
+        return url
+
+    def _get_chatgpt_mcp_url(self) -> str | None:
+        public_url = self._get_public_url()
         if not public_url:
             return None
         return f"{public_url.rstrip('/')}{self.settings.mcp.endpoint}"
 
-    def parse_cloudflared_logs_for_url(self) -> str | None:
+    def _current_log_size(self) -> int:
+        log_path = self.settings.logs.path / "cloudflared.log"
+        if log_path.exists():
+            return log_path.stat().st_size
+        return 0
+
+    def _parse_cloudflared_logs_for_url(self) -> str | None:
+        """Parcourt le log cloudflared à partir de _session_start_pos
+        et retourne la dernière URL trycloudflare trouvée."""
         log_path = self.settings.logs.path / "cloudflared.log"
         if not log_path.exists():
             return None
-        matches = URL_PATTERN.findall(log_path.read_text(encoding="utf-8", errors="replace"))
+
+        with log_path.open("r", encoding="utf-8", errors="replace") as f:
+            f.seek(self._session_start_pos)
+            text = f.read()
+
+        matches = URL_PATTERN.findall(text)
         return matches[-1].rstrip("/") if matches else None
 
-    def get_url_result(self) -> TunnelUrlResult:
-        public_url = self.get_public_url()
-        return TunnelUrlResult(
-            public_url=public_url,
-            chatgpt_mcp_url=self.get_chatgpt_mcp_url(),
-            message="URL Cloudflare active." if public_url else "Aucune URL Cloudflare détectée.",
-        )
-
-    def detect_cloudflare_error(self) -> str | None:
-        log_path = self.settings.logs.path / "cloudflared.log"
-        if not log_path.exists():
-            return None
-        tail = "\n".join(log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-200:])
-        for marker in (
-            "1033",
-            "530",
-            "connection refused",
-            "origin service unavailable",
-            "tunnel expired",
-        ):
-            if marker.lower() in tail.lower():
-                return f"Erreur Cloudflare détectée: {marker}"
-        return None
-
-
-def _state_modified_ts(path) -> datetime | None:
-    try:
-        mtime = path.stat().st_mtime
-        return datetime.fromtimestamp(mtime, tz=timezone.utc)
-    except OSError:
-        return None
-
-    def get_chatgpt_mcp_url(self) -> str | None:
-        public_url = self.get_public_url()
-        if not public_url:
-            return None
-        return f"{public_url.rstrip('/')}{self.settings.mcp.endpoint}"
-
-    def parse_cloudflared_logs_for_url(self) -> str | None:
-        log_path = self.settings.logs.path / "cloudflared.log"
-        if not log_path.exists():
-            return None
-        matches = URL_PATTERN.findall(log_path.read_text(encoding="utf-8", errors="replace"))
-        return matches[-1].rstrip("/") if matches else None
-
-    def get_url_result(self) -> TunnelUrlResult:
-        public_url = self.get_public_url()
-        return TunnelUrlResult(
-            public_url=public_url,
-            chatgpt_mcp_url=self.get_chatgpt_mcp_url(),
-            message="URL Cloudflare active." if public_url else "Aucune URL Cloudflare détectée.",
-        )
-
-    def detect_cloudflare_error(self) -> str | None:
+    def _detect_cloudflare_error(self) -> str | None:
         log_path = self.settings.logs.path / "cloudflared.log"
         if not log_path.exists():
             return None

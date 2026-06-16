@@ -1,8 +1,10 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
+from datetime import datetime
 from os import environ
 from pathlib import Path
 
@@ -44,7 +46,13 @@ class ProcessManager:
             )
         return ProcessStatus(status="stopped", pid=None, message="Processus arrêté.")
 
-    def start(self, name: str, command: list[str], port: int | None = None) -> ServiceActionResult:
+    def start(
+        self,
+        name: str,
+        command: list[str],
+        port: int | None = None,
+        reset_log: bool = False,
+    ) -> ServiceActionResult:
         current = self.status(name)
         if current.status == "running":
             return ServiceActionResult(
@@ -77,6 +85,8 @@ class ProcessManager:
 
         log_path = self.log_file(name)
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        if reset_log:
+            self._archive_log(log_path)
         child_env = environ.copy()
         child_env.setdefault("PYTHONIOENCODING", "utf-8")
         child_env.setdefault("PYTHONUTF8", "1")
@@ -149,6 +159,25 @@ class ProcessManager:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
+
+    @staticmethod
+    def _archive_log(log_path: Path) -> None:
+        """Archive un fichier de log existant vers logs/archive/.
+
+        Si le fichier est vide ou inexistant, ne fait rien.
+        Si le renommage échoue (fichier ouvert), copie + troncature.
+        """
+        if not log_path.exists() or log_path.stat().st_size == 0:
+            return
+        archive_dir = log_path.parent / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        archive_path = archive_dir / f"{log_path.stem}-{ts}{log_path.suffix}"
+        try:
+            log_path.rename(archive_path)
+        except OSError:
+            shutil.copy2(log_path, archive_path)
+            log_path.write_text("", encoding="utf-8")
 
     def _is_compatible_mcp_proxy(self, port: int) -> bool:
         """V1-style detection: vérifie si le processus sur le port est
