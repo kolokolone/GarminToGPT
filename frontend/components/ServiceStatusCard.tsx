@@ -1,5 +1,6 @@
 import { formatDate } from "../lib/format";
-import type { GarminAuthStatus, McpStatus, TunnelStatus } from "../lib/types";
+import type { GarminAuthStatus, McpLocalStatus, McpStatus, TunnelStatus } from "../lib/types";
+import { LoadingButton } from "./LoadingButton";
 import { StatusBadge } from "./StatusBadge";
 
 export function ServiceStatusCard({
@@ -9,6 +10,11 @@ export function ServiceStatusCard({
   onLogs,
   onAction,
   actionLabel,
+  mcpLocal,
+  mcpLoading,
+  onMcpStart,
+  onMcpStop,
+  onMcpRestart,
 }: {
   title: string;
   kind: "garmin" | "mcp" | "tunnel";
@@ -16,6 +22,11 @@ export function ServiceStatusCard({
   onLogs: () => void;
   onAction?: () => void;
   actionLabel?: string;
+  mcpLocal?: McpLocalStatus | null;
+  mcpLoading?: boolean;
+  onMcpStart?: () => void;
+  onMcpStop?: () => void;
+  onMcpRestart?: () => void;
 }) {
   const state = "state" in data ? data.state : "unknown";
   return (
@@ -26,11 +37,23 @@ export function ServiceStatusCard({
       </div>
       {kind === "garmin" ? <GarminDetails data={data as GarminAuthStatus} /> : null}
       {kind === "mcp" ? <McpDetails data={data as McpStatus} /> : null}
+      {kind === "mcp" && mcpLocal ? <McpLocalDetails status={mcpLocal} /> : null}
       {kind === "tunnel" ? <TunnelDetails data={data as TunnelStatus} /> : null}
-      <div className="row wrap">
-        <button className="secondary" onClick={onLogs}>Afficher les logs</button>
-        {onAction && actionLabel ? <button onClick={onAction}>{actionLabel}</button> : null}
-      </div>
+      {kind === "mcp" ? (
+        <McpControls
+          localStatus={mcpLocal}
+          loading={mcpLoading ?? false}
+          onStart={onMcpStart}
+          onStop={onMcpStop}
+          onRestart={onMcpRestart}
+          onLogs={onLogs}
+        />
+      ) : (
+        <div className="row wrap">
+          <button className="secondary" onClick={onLogs}>Afficher les logs</button>
+          {onAction && actionLabel ? <button onClick={onAction}>{actionLabel}</button> : null}
+        </div>
+      )}
     </article>
   );
 }
@@ -53,6 +76,65 @@ function McpDetails({ data }: { data: McpStatus }) {
       <div><dt>PID</dt><dd>{data.process.pid ?? "-"}</dd></div>
       <div><dt>Healthcheck</dt><dd>{data.healthcheck?.message ?? "non lancé"}</dd></div>
     </dl>
+  );
+}
+
+function McpLocalDetails({ status }: { status: McpLocalStatus }) {
+  return (
+    <dl className="details">
+      <div><dt>Port</dt><dd>{status.port}</dd></div>
+      <div><dt>Dernier démarrage</dt><dd>{formatDate(status.last_started_at)}</dd></div>
+      <div><dt>Dernier arrêt</dt><dd>{formatDate(status.last_stopped_at)}</dd></div>
+      {status.last_error ? <div><dt>Dernière erreur</dt><dd className="error-text">{status.last_error}</dd></div> : null}
+    </dl>
+  );
+}
+
+function McpControls({
+  localStatus,
+  loading,
+  onStart,
+  onStop,
+  onRestart,
+  onLogs,
+}: {
+  localStatus?: McpLocalStatus | null;
+  loading: boolean;
+  onStart?: () => void;
+  onStop?: () => void;
+  onRestart?: () => void;
+  onLogs?: () => void;
+}) {
+  const running = localStatus?.status === "running";
+  const stopped = localStatus?.status === "stopped";
+  const starting = localStatus?.status === "starting";
+  const stopping = localStatus?.status === "stopping";
+  const errored = localStatus?.status === "error";
+
+  return (
+    <>
+      <p className="helper-text">
+        Le tunnel Cloudflare peut rester ouvert. Quand le MCP local est arrêté,
+        ChatGPT ne peut plus accéder aux outils Garmin.
+      </p>
+      <div className="row wrap">
+        <button className="secondary" onClick={onLogs}>Afficher les logs</button>
+        {running ? (
+          <LoadingButton className="danger" loading={loading || stopping} onClick={onStop}>
+            Arrêter le MCP local
+          </LoadingButton>
+        ) : (
+          <LoadingButton loading={loading || starting} onClick={onStart}>
+            Démarrer le MCP local
+          </LoadingButton>
+        )}
+        {running || errored ? (
+          <LoadingButton className="secondary" loading={loading} onClick={onRestart}>
+            Redémarrer le MCP local
+          </LoadingButton>
+        ) : null}
+      </div>
+    </>
   );
 }
 

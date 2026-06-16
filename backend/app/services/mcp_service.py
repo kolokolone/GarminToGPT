@@ -3,10 +3,18 @@ import logging
 
 from app.core.config import Settings
 from app.models.common import HealthcheckResult
-from app.models.mcp import McpProbeResult, McpStatus, McpTool, McpToolClassification, McpToolsResult
+from app.models.mcp import (
+    McpLocalStatus,
+    McpProbeResult,
+    McpStatus,
+    McpTool,
+    McpToolClassification,
+    McpToolsResult,
+)
 from app.services.healthcheck_service import HealthcheckService
 from app.services.mcp_probe_service import probe_mcp_endpoint
 from app.services.process_manager import ProcessManager
+from app.utils.time import utc_now_iso
 
 logger = logging.getLogger("GarminToGPT.mcp")
 
@@ -24,6 +32,9 @@ class McpService:
         self.process_manager = process_manager
         self.healthchecks = healthchecks
         self._last_probe: McpProbeResult | None = None
+        self._last_started_at: str | None = None
+        self._last_stopped_at: str | None = None
+        self._last_error: str | None = None
 
     @property
     def local_url(self) -> str:
@@ -37,14 +48,74 @@ class McpService:
 
     def start_mcp_service(self):
         command = self.settings.mcp.proxy_command or self.settings.mcp.command
-        return self.process_manager.start("mcp", command, port=self.settings.mcp.port)
+        result = self.process_manager.start("mcp", command, port=self.settings.mcp.port)
+        if result.ok:
+            self._last_started_at = utc_now_iso()
+            self._last_error = None
+            logger.info("MCP proxy starting (PID %s)", result.pid)
+        else:
+            self._last_error = result.message
+            logger.error("MCP proxy failed to start: %s", result.message)
+        return result
 
     def stop_mcp_service(self):
-        return self.process_manager.stop("mcp")
+        logger.info("MCP proxy stopping")
+        result = self.process_manager.stop("mcp")
+        if result.ok and result.status == "stopped":
+            self._last_stopped_at = utc_now_iso()
+            self._last_started_at = None
+            logger.info("MCP proxy stopped")
+        return result
 
     def restart_mcp_service(self):
         self.stop_mcp_service()
         return self.start_mcp_service()
+
+    def get_local_status(self) -> McpLocalStatus:
+        process = self.process_manager.status("mcp")
+        status: str
+        if process.status == "running":
+            # Vérifier que le PID est toujours vivant
+            if process.pid and not self._pid_alive(process.pid):
+                self._last_error = (
+                    f"Processus MCP mort (PID {process.pid}) mais port "
+                    "peut-être encore occupé."
+                )
+                status = "error"
+            else:
+                status = "running"
+        elif process.status == "starting":
+            status = "starting"
+        elif process.status == "stopped":
+            status = "stopped"
+        else:
+            status = "error"
+            if not self._last_error:
+                self._last_error = process.message
+
+        return McpLocalStatus(
+            running=(status == "running"),
+            status=status,  # type: ignore[arg-type]
+            pid=process.pid,
+            port=self.settings.mcp.port,
+            last_started_at=self._last_started_at,
+            last_stopped_at=self._last_stopped_at,
+            last_error=self._last_error,
+        )
+
+    @staticmethod
+    def _pid_alive(pid: int) -> bool:
+        """Vérifie si un PID est vivant (cross-platform)."""
+        import os as _os
+        import subprocess as _sp
+        try:
+            if _os.name == "nt":
+                _sp.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, timeout=5)
+                return True
+            _os.kill(pid, 0)
+            return True
+        except (OSError, _sp.SubprocessError):
+            return False
 
     def get_mcp_status(self) -> McpStatus:
         process = self.process_manager.status("mcp")

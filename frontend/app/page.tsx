@@ -8,7 +8,7 @@ import { ServiceStatusCard } from "../components/ServiceStatusCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { TunnelCard } from "../components/TunnelCard";
 import { api } from "../lib/api";
-import type { GlobalStatus, LogResult, TunnelStatus } from "../lib/types";
+import type { GlobalStatus, LogResult, McpLocalStatus, TunnelStatus } from "../lib/types";
 
 const INITIAL_TUNNEL: TunnelStatus = {
   state: "starting",
@@ -28,6 +28,8 @@ export default function HomePage() {
   const [logsService, setLogsService] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogResult | null>(null);
   const [confirm, setConfirm] = useState<null | "stopTunnel" | "disconnect" | "regenerate">(null);
+  const [mcpLocal, setMcpLocal] = useState<McpLocalStatus | null>(null);
+  const [mcpLoading, setMcpLoading] = useState(false);
 
   async function refresh() {
     try {
@@ -38,8 +40,17 @@ export default function HomePage() {
     }
   }
 
+  async function refreshMcp() {
+    try {
+      setMcpLocal(await api.mcpLocalStatus());
+    } catch {
+      // silencieux pendant le polling
+    }
+  }
+
   useEffect(() => {
     void refresh();
+    void refreshMcp();
   }, []);
 
   // Auto-poll toutes les 3s quand le tunnel démarre
@@ -64,6 +75,14 @@ export default function HomePage() {
     };
   }, [tunnelState]);
 
+  // Polling MCP status toutes les 3s
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      await refreshMcp();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   async function runAction(action: () => Promise<unknown>) {
     setLoadingAction(true);
     try {
@@ -74,6 +93,25 @@ export default function HomePage() {
     } finally {
       setLoadingAction(false);
       setConfirm(null);
+    }
+  }
+
+  async function runMcpAction(
+    action: () => Promise<McpLocalStatus>,
+    transientStatus: McpLocalStatus["status"],
+  ) {
+    setMcpLoading(true);
+    // Afficher immédiatement l'état transitoire
+    setMcpLocal((prev) => prev ? { ...prev, status: transientStatus } : prev);
+    try {
+      const result = await action();
+      setMcpLocal(result);
+      await refresh();
+    } catch (err) {
+      setMcpLocal((prev) => prev ? { ...prev, status: "error", last_error: err instanceof Error ? err.message : "Action MCP impossible" } : prev);
+      setError(err instanceof Error ? err.message : "Action MCP impossible");
+    } finally {
+      setMcpLoading(false);
     }
   }
 
@@ -126,7 +164,17 @@ export default function HomePage() {
         onRegenerate={() => setConfirm("regenerate")}
       />
       <section className="grid">
-        <ServiceStatusCard title="Service local" kind="mcp" data={status.mcp} onLogs={() => void openLogs("mcp")} onAction={() => void runAction(api.restartMcp)} actionLabel="Redémarrer le service local" />
+        <ServiceStatusCard
+          title="Service local"
+          kind="mcp"
+          data={status.mcp}
+          onLogs={() => void openLogs("mcp")}
+          mcpLocal={mcpLocal}
+          mcpLoading={mcpLoading}
+          onMcpStart={() => void runMcpAction(api.startMcp, "starting")}
+          onMcpStop={() => void runMcpAction(api.stopMcp, "stopping")}
+          onMcpRestart={() => void runMcpAction(api.restartMcp, "starting")}
+        />
         <ServiceStatusCard title="Garmin MCP" kind="garmin" data={status.garmin} onLogs={() => void openLogs("auth")} onAction={() => setConfirm("disconnect")} actionLabel="Déconnexion" />
         <ServiceStatusCard title="Cloudflare Tunnel" kind="tunnel" data={status.tunnel} onLogs={() => void openLogs("cloudflare")} onAction={() => void runAction(api.pauseTunnel)} actionLabel="Pause" />
       </section>

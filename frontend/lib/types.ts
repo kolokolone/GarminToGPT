@@ -8,8 +8,9 @@ export type GarminState =
   | "reauth_required"
   | "error";
 export type McpState = "stopped" | "starting" | "running" | "unhealthy" | "error";
+export type McpLocalState = "running" | "stopped" | "starting" | "stopping" | "error";
 export type TunnelState = "stopped" | "starting" | "running" | "paused" | "expired" | "error";
-export type BadgeState = GlobalState | GarminState | McpState | TunnelState | "success" | "failed" | "not_run" | "skipped";
+export type BadgeState = GlobalState | GarminState | McpState | TunnelState | "success" | "failed" | "not_run" | "skipped" | McpLocalState;
 
 export interface ProcessStatus {
   status: McpState;
@@ -48,6 +49,16 @@ export interface McpStatus {
   local_url: string;
   process: ProcessStatus;
   healthcheck: HealthcheckResult | null;
+}
+
+export interface McpLocalStatus {
+  running: boolean;
+  status: McpLocalState;
+  pid: number | null;
+  port: number;
+  last_started_at: string | null;
+  last_stopped_at: string | null;
+  last_error: string | null;
 }
 
 export interface TunnelStatus {

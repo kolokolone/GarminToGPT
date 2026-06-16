@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from app.models.common import HealthcheckResult, ProcessStatus, ServiceActionResult
 
 McpState = Literal["stopped", "starting", "running", "unhealthy", "error"]
+McpLocalState = Literal["running", "stopped", "starting", "stopping", "error"]
 
 
 class McpStatus(BaseModel):
@@ -15,6 +16,18 @@ class McpStatus(BaseModel):
     local_url: str
     process: ProcessStatus
     healthcheck: HealthcheckResult | None = None
+
+
+class McpLocalStatus(BaseModel):
+    """Statut simplifié du MCP local pour les contrôles UI."""
+
+    running: bool
+    status: McpLocalState
+    pid: int | None = None
+    port: int
+    last_started_at: str | None = None
+    last_stopped_at: str | None = None
+    last_error: str | None = None
 
 
 class McpTool(BaseModel):
