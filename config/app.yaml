@@ -1,0 +1,81 @@
+app:
+  name: GarminToGPT
+  version: 0.1.0
+  environment: local
+
+server:
+  host: 127.0.0.1
+  backend_port: 8000
+  frontend_port: 3000
+
+mcp:
+  host: 127.0.0.1
+  port: 8080
+  endpoint: /mcp
+  sse_endpoint: /sse
+  command:
+    - uvx
+    - --python
+    - "3.12"
+    - --from
+    - git+https://github.com/Taxuspt/garmin_mcp
+    - garmin-mcp
+  proxy_command:
+    - uvx
+    - mcp-proxy
+    - --host
+    - 127.0.0.1
+    - --port
+    - "8080"
+    - --
+    - uvx
+    - --python
+    - "3.12"
+    - --from
+    - git+https://github.com/Taxuspt/garmin_mcp
+    - garmin-mcp
+
+garmin:
+  auth_command:
+    - uvx
+    - --python
+    - "3.12"
+    - --from
+    - git+https://github.com/Taxuspt/garmin_mcp
+    - garmin-mcp-auth
+  verify_command:
+    - uvx
+    - --python
+    - "3.12"
+    - --from
+    - git+https://github.com/Taxuspt/garmin_mcp
+    - garmin-mcp-auth
+    - --verify
+  token_dir: "%USERPROFILE%\\.garminconnect"
+
+cloudflare:
+  mode: quick
+  local_url: http://127.0.0.1:8080
+  tunnel_name: ""
+  hostname: ""
+  command: cloudflared
+
+runtime:
+  dir: runtime
+  pid_dir: runtime/pids
+  state_file: runtime/state.json
+
+logs:
+  dir: logs
+  max_size_mb: 10
+  retain_files: 5
+
+security:
+  bind_local_only: true
+  redact_sensitive_logs: true
+  allow_write_tools: false
+
+timeouts:
+  process_start_seconds: 45
+  process_stop_seconds: 15
+  healthcheck_seconds: 10
