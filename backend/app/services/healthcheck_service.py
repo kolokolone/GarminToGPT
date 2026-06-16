@@ -13,10 +13,16 @@ class HealthcheckService:
             response = httpx.get(url, timeout=self.settings.timeouts.healthcheck_seconds)
         except httpx.RequestError as exc:
             return HealthcheckResult(ok=False, target=url, message=f"Endpoint inaccessible: {exc}")
-        ok = response.status_code < 500
+        if response.status_code < 200 or response.status_code >= 300:
+            return HealthcheckResult(
+                ok=False,
+                target=url,
+                status_code=response.status_code,
+                message=f"Endpoint a retourné HTTP {response.status_code} – attendu 2xx.",
+            )
         return HealthcheckResult(
-            ok=ok,
+            ok=True,
             target=url,
             status_code=response.status_code,
-            message="Endpoint accessible." if ok else "Endpoint en erreur serveur.",
+            message="Endpoint accessible.",
         )

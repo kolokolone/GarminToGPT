@@ -1,21 +1,16 @@
+import asyncio
+import logging
+
 from app.core.config import Settings
 from app.models.common import HealthcheckResult
-from app.models.mcp import McpStatus, McpTool, McpToolClassification, McpToolsResult
+from app.models.mcp import McpProbeResult, McpStatus, McpTool, McpToolClassification, McpToolsResult
 from app.services.healthcheck_service import HealthcheckService
+from app.services.mcp_probe_service import probe_mcp_endpoint
 from app.services.process_manager import ProcessManager
 
+logger = logging.getLogger("garmintogpt.mcp")
+
 WRITE_PREFIXES = ("add_", "set_", "delete_", "remove_", "upload_", "schedule_", "unschedule_")
-KNOWN_GARMIN_TOOLS = [
-    "get_activities",
-    "get_activity",
-    "get_stats",
-    "get_sleep_summary",
-    "add_weigh_in",
-    "delete_weigh_ins",
-    "upload_workout",
-    "schedule_workout",
-    "set_activity_name",
-]
 
 
 class McpService:
@@ -28,12 +23,17 @@ class McpService:
         self.settings = settings
         self.process_manager = process_manager
         self.healthchecks = healthchecks
+        self._last_probe: McpProbeResult | None = None
 
     @property
     def local_url(self) -> str:
         return (
             f"http://{self.settings.mcp.host}:{self.settings.mcp.port}{self.settings.mcp.endpoint}"
         )
+
+    @property
+    def base_mcp_url(self) -> str:
+        return f"http://{self.settings.mcp.host}:{self.settings.mcp.port}"
 
     def start_mcp_service(self):
         command = self.settings.mcp.proxy_command or self.settings.mcp.command
@@ -64,17 +64,35 @@ class McpService:
         )
 
     def healthcheck_mcp(self) -> HealthcheckResult:
-        return self.healthchecks.check_http_endpoint(self.local_url)
+        """Vrai healthcheck MCP via probe JSON-RPC (plus de simple GET)."""
+        probe = self._run_probe()
+        self._last_probe = probe
+        if probe.error:
+            return HealthcheckResult(
+                ok=False,
+                target=self.local_url,
+                message=probe.error,
+            )
+        return HealthcheckResult(
+            ok=True,
+            target=self.local_url,
+            message=f"MCP OK – {probe.tools_count} outil(s), serveur {probe.server_name or 'inconnu'}",
+        )
 
     def list_mcp_tools(self) -> McpToolsResult:
-        tools = [self._classify_tool(name) for name in KNOWN_GARMIN_TOOLS]
+        """Interroge le vrai serveur MCP via JSON-RPC tools/list."""
+        probe = self._run_probe()
+        if not probe.ok:
+            return McpToolsResult(
+                ok=False,
+                message=probe.error or "Impossible d'interroger le serveur MCP.",
+                tools=[],
+            )
+        classified = [self._classify_tool(t.get("name", "?")) for t in probe.tools]
         return McpToolsResult(
-            ok=False,
-            message=(
-                "Liste conservatrice basée sur les noms connus garmin-mcp. "
-                "L'introspection MCP live sera disponible quand le proxy expose la liste d'outils."
-            ),
-            tools=tools,
+            ok=True,
+            message=f"{probe.tools_count} outil(s) réel(s) exposé(s) par le serveur.",
+            tools=classified,
         )
 
     def classify_mcp_tools(self) -> McpToolClassification:
@@ -85,7 +103,63 @@ class McpService:
             unknown_tools=[tool.name for tool in tools if tool.risk == "unknown"],
         )
 
-    def _classify_tool(self, name: str) -> McpTool:
+    def get_raw_tools(self) -> list[dict]:
+        """Retourne les outils bruts (nom + description + input_schema) pour l'UI."""
+        probe = self._run_probe()
+        if not probe.ok:
+            return []
+        return probe.tools
+
+    def _run_probe(self) -> McpProbeResult:
+        """Exécute le probe MCP (synchrone mais appelant du code async).
+
+        Gère trois cas de figure événementiel :
+        - Thread avec une boucle qui tourne (uvicorn main thread)
+          → ``run_coroutine_threadsafe``
+        - Thread avec une boucle mais qui ne tourne pas (tests unitaires)
+          → ``asyncio.run``
+        - Thread AnyIO / worker sans boucle du tout
+          → ``asyncio.run`` (lève la sienne)
+        """
+        try:
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # Aucune boucle dans ce thread (AnyIO worker thread p. ex.)
+                return asyncio.run(
+                    probe_mcp_endpoint(
+                        self.base_mcp_url,
+                        timeout_seconds=self.settings.timeouts.healthcheck_seconds,
+                    ),
+                )
+
+            if loop.is_running():
+                future = asyncio.run_coroutine_threadsafe(
+                    probe_mcp_endpoint(
+                        self.base_mcp_url,
+                        timeout_seconds=self.settings.timeouts.healthcheck_seconds,
+                    ),
+                    loop,
+                )
+                return future.result(timeout=self.settings.timeouts.healthcheck_seconds + 5)
+
+            return asyncio.run(
+                probe_mcp_endpoint(
+                    self.base_mcp_url,
+                    timeout_seconds=self.settings.timeouts.healthcheck_seconds,
+                ),
+            )
+        except Exception as exc:
+            logger.error("MCP probe failed: %s", exc)
+            return McpProbeResult(
+                ok=False,
+                status="error",
+                error=str(exc),
+                final_url=self.base_mcp_url,
+            )
+
+    @staticmethod
+    def _classify_tool(name: str) -> McpTool:
         if name.startswith(WRITE_PREFIXES):
             return McpTool(name=name, risk="write", reason="Préfixe d'action modifiante détecté.")
         if name.startswith("get_") or name.startswith("count_"):
