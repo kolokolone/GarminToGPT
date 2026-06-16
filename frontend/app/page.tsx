@@ -8,7 +8,17 @@ import { ServiceStatusCard } from "../components/ServiceStatusCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { TunnelCard } from "../components/TunnelCard";
 import { api } from "../lib/api";
-import type { GlobalStatus, LogResult } from "../lib/types";
+import type { GlobalStatus, LogResult, TunnelStatus } from "../lib/types";
+
+const INITIAL_TUNNEL: TunnelStatus = {
+  state: "starting",
+  mode: "quick",
+  public_url: null,
+  chatgpt_mcp_url: null,
+  pid: null,
+  last_event: null,
+  process: { status: "starting", pid: null, message: "" },
+};
 
 export default function HomePage() {
   const [status, setStatus] = useState<GlobalStatus | null>(null);
@@ -32,6 +42,28 @@ export default function HomePage() {
     void refresh();
   }, []);
 
+  // Auto-poll toutes les 3s quand le tunnel démarre
+  const tunnelState = status?.tunnel.state ?? "stopped";
+
+  useEffect(() => {
+    if (tunnelState !== "starting") return;
+
+    const interval = setInterval(async () => {
+      try {
+        const s = await api.status();
+        setStatus(s);
+      } catch {
+        /* silencieux pendant le polling */
+      }
+    }, 3000);
+    const timeout = setTimeout(() => clearInterval(interval), 60000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [tunnelState]);
+
   async function runAction(action: () => Promise<unknown>) {
     setLoadingAction(true);
     try {
@@ -51,7 +83,21 @@ export default function HomePage() {
   }
 
   if (!status) {
-    return <main className="shell"><AppHeader /><p className="card">Chargement de l’état local...</p></main>;
+    return (
+      <main className="shell">
+        <AppHeader />
+        <TunnelCard
+          tunnel={INITIAL_TUNNEL}
+          loading={false}
+          copied={false}
+          onCopy={() => {}}
+          onStart={() => {}}
+          onStop={() => {}}
+          onRegenerate={() => {}}
+        />
+        <p className="card">Chargement de l&rsquo;état local...</p>
+      </main>
+    );
   }
 
   return (
