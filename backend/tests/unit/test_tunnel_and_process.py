@@ -25,7 +25,7 @@ def test_cloudflare_url_parsing_and_chatgpt_url(tmp_path) -> None:
 
     service = TunnelService(settings, ProcessManager(settings), StateStore(settings))
 
-    assert service.parse_cloudflared_logs_for_url() == "https://abc-def.trycloudflare.com"
+    assert service._parse_cloudflared_logs_for_url() == "https://abc-def.trycloudflare.com"
     assert service.get_chatgpt_mcp_url() == "https://abc-def.trycloudflare.com/mcp"
 
 
