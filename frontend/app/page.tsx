@@ -32,6 +32,7 @@ const INITIAL_TUNNEL: TunnelStatus = {
 export default function HomePage() {
   const [status, setStatus] = useState<GlobalStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loadingAction, setLoadingAction] = useState(false);
   const [copied, setCopied] = useState(false);
   const [logsService, setLogsService] = useState<string | null>(null);
@@ -44,8 +45,13 @@ export default function HomePage() {
 
   const refresh = useCallback(async () => {
     try {
-      setStatus(await api.status());
+      const s = await api.status();
+      setStatus(s);
       setError(null);
+      // Efface la notification si Garmin est maintenant connecté
+      if (s.garmin.token_found && s.garmin.token_valid) {
+        setNotice(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur inconnue");
     }
@@ -122,6 +128,23 @@ export default function HomePage() {
     try {
       const result = await api.startAccess();
       setStatus(result);
+      // Notification métier selon l'état Garmin
+      if (result.state === "needs_auth" || result.garmin.state === "no_token") {
+        setNotice(
+          "Compte Garmin non connecté. Le service Garmin MCP ne peut pas démarrer " +
+          "car aucun token Garmin n'a été trouvé. " +
+          "Lance l'authentification Garmin une première fois dans le conteneur, puis réessaie."
+        );
+      } else if (
+        result.garmin.state === "auth_invalid" ||
+        result.garmin.state === "reauth_required"
+      ) {
+        setNotice(
+          "Authentification Garmin à corriger. Le token Garmin existe mais n'est plus valide."
+        );
+      } else {
+        setNotice(null);
+      }
       await refreshMcp();
     } catch (err) {
       setMcpLocal((prev) =>
@@ -273,6 +296,9 @@ export default function HomePage() {
 
       {/* Error banner */}
       {error ? <p className="error-box">{error}</p> : null}
+
+      {/* Notice métier (auth manquante, token invalide) */}
+      {notice ? <p className="warning-box">{notice}</p> : null}
 
       {/* ── 3. Access ChatGPT Card ── */}
       {accessInfo ? (
