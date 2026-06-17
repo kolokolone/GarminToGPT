@@ -9,8 +9,10 @@ Cas testés (backend uniquement — sans serveur FastAPI) :
 """
 
 import sys
+from unittest.mock import patch
 
 from app.core.config import Settings
+from app.models.common import ServiceActionResult
 from app.services.healthcheck_service import HealthcheckService
 from app.services.mcp_service import McpService
 from app.services.process_manager import ProcessManager
@@ -76,11 +78,16 @@ def test_ensure_tunnel_stopped_starts_tunnel(tmp_path) -> None:
     initial = svc.get_tunnel_status()
     assert initial.state == "stopped"
 
-    result = svc.ensure_tunnel()
-    # Le processus a bien été lancé (même si cloudflared n'existe pas,
-    # on utilise le chemin de python)
+    # Mock ProcessManager.start pour éviter de lancer cloudflared (inexistant sur CI)
+    fake_result = ServiceActionResult(
+        ok=True, status="starting", message="Fake tunnel lancé", pid=12345
+    )
+    with patch.object(svc.process_manager, "start", return_value=fake_result) as mock_start:
+        result = svc.ensure_tunnel()
+
+    assert mock_start.called is True, "ensure_tunnel doit appeler process_manager.start"
     assert result.ok is True
-    assert result.status in ("starting", "error")
+    assert result.status == "starting"
 
 
 # ── Cas B : ensure_tunnel avec tunnel running → no-op ──
