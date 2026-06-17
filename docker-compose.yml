@@ -1,16 +1,37 @@
 services:
   garmintogpt:
-    build: .
     image: ghcr.io/kolokolone/garmintogpt:latest
     container_name: garmintogpt
-    ports:
-      - "127.0.0.1:8000:8000"
-    volumes:
-      - ./config:/app/config
-      - ./logs:/app/logs
-      - ./runtime:/app/runtime
-      - ./data/garmin:/home/app/.garminconnect
-    environment:
-      - GARMINTOGPT_ENV=local
-      - GARMINTOGPT_CONFIG=/app/config/app.yaml
+
     restart: unless-stopped
+    init: true
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      GARMINTOGPT_ENV: local
+      GARMINTOGPT_CONFIG: /app/config/app.yaml
+      GARMINTOGPT_LOG_LEVEL: INFO
+      PYTHONUNBUFFERED: "1"
+
+    volumes:
+      - garmintogpt_logs:/app/logs
+      - garmintogpt_runtime:/app/runtime
+      - garmintogpt_garmin:/home/app/.garminconnect
+      - garmintogpt_cloudflared:/home/app/.cloudflared
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+    stop_grace_period: 30s
+
+volumes:
+  garmintogpt_logs:
+  garmintogpt_runtime:
+  garmintogpt_garmin:
+  garmintogpt_cloudflared:

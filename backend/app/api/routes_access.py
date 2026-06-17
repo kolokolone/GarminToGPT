@@ -48,15 +48,34 @@ def start_access() -> GlobalStatus:
     """Active l'accès ChatGPT aux outils Garmin.
 
     Orchestration métier :
-      1. Démarre le MCP local s'il n'est pas déjà running/starting.
-      2. Garantit que le tunnel Cloudflare est actif (sans le régénérer
+      0. Vérifie que l'authentification Garmin est valide avant toute action.
+      1. Si Garmin n'est pas authentifié → retourne immédiatement sans
+         démarrer MCP ni Cloudflare.
+      2. Démarre le MCP local s'il n'est pas déjà running/starting.
+      3. Garantit que le tunnel Cloudflare est actif (sans le régénérer
          s'il existe déjà).
-      3. Retourne le statut global.
+      4. Retourne le statut global.
 
     Idempotent : peut être appelé plusieurs fois sans effet de bord.
     """
     container = get_container()
     logger.info("Starting ChatGPT access")
+
+    # 0. Vérification Garmin avant toute chose
+    garmin = container.garmin.verify_garmin_auth()
+    if garmin.state == "no_token":
+        logger.warning(
+            "Garmin auth required — no token found. "
+            "Skipping MCP and tunnel start."
+        )
+        return _build_global_status()
+    if garmin.state in {"auth_invalid", "reauth_required", "error"}:
+        logger.warning(
+            "Garmin auth required — state=%s. "
+            "Skipping MCP and tunnel start.",
+            garmin.state,
+        )
+        return _build_global_status()
 
     # 1. MCP local
     mcp_local = container.mcp.get_local_status()
