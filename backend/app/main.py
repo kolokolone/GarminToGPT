@@ -5,7 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from app.api import routes_auth, routes_logs, routes_mcp, routes_status, routes_tests, routes_tunnel
+from app.api import (
+    routes_access,
+    routes_auth,
+    routes_logs,
+    routes_mcp,
+    routes_status,
+    routes_tests,
+    routes_tunnel,
+)
 from app.core.config import get_settings
 from app.core.paths import project_root
 
@@ -30,6 +38,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_tunnel.router)
     app.include_router(routes_logs.router)
     app.include_router(routes_tests.router)
+    app.include_router(routes_access.router)
 
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon() -> Response:

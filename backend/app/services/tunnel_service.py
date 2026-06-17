@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import datetime, timezone
 
@@ -5,6 +6,8 @@ from app.core.config import Settings
 from app.models.tunnel import TunnelActionResult, TunnelStatus, TunnelUrlResult
 from app.services.process_manager import ProcessManager
 from app.services.state_store import StateStore
+
+logger = logging.getLogger("GarminToGPT.tunnel")
 
 URL_PATTERN = re.compile(r"https://[a-zA-Z0-9.-]+\.trycloudflare\.com")
 _START_TS_KEY = "tunnel_start_ts"
@@ -23,6 +26,31 @@ class TunnelService:
     # ------------------------------------------------------------------
     # Public actions
     # ------------------------------------------------------------------
+
+    def ensure_tunnel(self) -> TunnelActionResult:
+        """Idempotent: démarre le tunnel seulement s'il n'est ni running ni starting.
+
+        Si le tunnel est déjà actif ou en cours de démarrage, ne fait rien
+        et retourne le statut existant sans muter l'URL.
+        """
+        status = self.get_tunnel_status()
+        if status.state in ("running", "starting"):
+            logger.info(
+                "Cloudflare tunnel already %s; reusing existing tunnel (URL: %s)",
+                status.state,
+                status.chatgpt_mcp_url or "not yet available",
+            )
+            return TunnelActionResult(
+                ok=True,
+                status=status.state,
+                message=f"Tunnel déjà {status.state}.",
+                pid=status.pid,
+                public_url=status.public_url,
+                chatgpt_mcp_url=status.chatgpt_mcp_url,
+            )
+
+        logger.info("Cloudflare tunnel missing/stopped; starting tunnel")
+        return self.start_tunnel()
 
     def start_tunnel(self) -> TunnelActionResult:
         self._clear_current_url()

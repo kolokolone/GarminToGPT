@@ -116,6 +116,40 @@ export default function HomePage() {
     [refresh],
   );
 
+  const runAccessStart = useCallback(async () => {
+    setMcpLoading(true);
+    setMcpLocal((prev) => prev ? { ...prev, status: "starting" } : prev);
+    try {
+      const result = await api.startAccess();
+      setStatus(result);
+      await refreshMcp();
+    } catch (err) {
+      setMcpLocal((prev) =>
+        prev ? { ...prev, status: "error", last_error: err instanceof Error ? err.message : "Action impossible" } : prev
+      );
+      setError(err instanceof Error ? err.message : "Action impossible");
+    } finally {
+      setMcpLoading(false);
+    }
+  }, [refreshMcp]);
+
+  const runAccessStop = useCallback(async () => {
+    setMcpLoading(true);
+    setMcpLocal((prev) => prev ? { ...prev, status: "stopping" } : prev);
+    try {
+      const result = await api.stopAccess();
+      setStatus(result);
+      await refreshMcp();
+    } catch (err) {
+      setMcpLocal((prev) =>
+        prev ? { ...prev, status: "error", last_error: err instanceof Error ? err.message : "Action impossible" } : prev
+      );
+      setError(err instanceof Error ? err.message : "Action impossible");
+    } finally {
+      setMcpLoading(false);
+    }
+  }, [refreshMcp]);
+
   const openLogs = useCallback(async (service: string) => {
     setLogsService(service);
     setLogs(null);
@@ -267,13 +301,13 @@ export default function HomePage() {
           {/* Action buttons */}
           <div className="action-bar" style={{ marginTop: "var(--space-3)" }}>
             {accessInfo.primaryAction === "stop" ? (
-              <button className="danger-lg" onClick={() => runMcpAction(api.stopMcp, "stopping")} disabled={mcpLoading}>
+              <button className="danger-lg" onClick={runAccessStop} disabled={mcpLoading}>
                 {mcpLoading ? <span className="spinner" aria-hidden="true" /> : null}
                 {accessInfo.primaryLabel}
               </button>
             ) : null}
             {accessInfo.primaryAction === "start" ? (
-              <button className="primary-green" onClick={() => runMcpAction(api.startMcp, "starting")} disabled={mcpLoading}>
+              <button className="primary-green" onClick={runAccessStart} disabled={mcpLoading}>
                 {mcpLoading ? <span className="spinner" aria-hidden="true" /> : null}
                 {accessInfo.primaryLabel}
               </button>
@@ -285,7 +319,7 @@ export default function HomePage() {
               </button>
             ) : null}
             {accessInfo.primaryAction === "retry" ? (
-              <button className="primary-green" onClick={() => runMcpAction(api.startMcp, "starting")} disabled={mcpLoading}>
+              <button className="primary-green" onClick={runAccessStart} disabled={mcpLoading}>
                 {mcpLoading ? <span className="spinner" aria-hidden="true" /> : null}
                 {accessInfo.primaryLabel}
               </button>

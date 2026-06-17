@@ -26,6 +26,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  startAccess: () => request<GlobalStatus>("/api/access/start", { method: "POST" }),
+  stopAccess: () => request<GlobalStatus>("/api/access/stop", { method: "POST" }),
   status: () => request<GlobalStatus>("/api/status"),
   authStatus: () => request<GarminAuthStatus>("/api/auth/status"),
   login: (payload: { email?: string; password?: string; otp?: string }) =>
