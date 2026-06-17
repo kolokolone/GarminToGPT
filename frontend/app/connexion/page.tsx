@@ -35,10 +35,11 @@ export default function ConnexionPage() {
     setResult(null);
     try {
       const response = await api.login({ email, password, otp });
-      setPassword("");
       setResult(response);
       setAuth(response.status);
       if (response.ok) {
+        setPassword("");
+        setOtp("");
         router.push("/");
       }
     } catch (err) {
