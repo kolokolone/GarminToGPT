@@ -20,14 +20,14 @@ export function LogsModal({
   const [filter, setFilter] = useState("");
   const logsRef = useRef<HTMLPreElement>(null);
 
-  if (!service) return null;
-
+  // Derived state — safe before any conditional return
   const allLines = logs?.lines ?? [];
   const filteredLines = filter
     ? allLines.filter((line) => line.toLowerCase().includes(filter.toLowerCase()))
     : allLines;
   const content = filteredLines.join("\n") || "(aucune ligne correspondante)";
-  const hasError = !!error;
+
+  // ── All hooks MUST live before the early return ──
 
   // Auto-scroll when new content arrives
   useEffect(() => {
@@ -56,6 +56,11 @@ export function LogsModal({
   const handleCopy = useCallback(() => {
     navigator.clipboard?.writeText(allLines.join("\n"));
   }, [allLines]);
+
+  // Early return after all hooks — non-négociable pour React
+  if (!service) return null;
+
+  const hasError = !!error;
 
   return (
     <div className="modal-backdrop" role="presentation">

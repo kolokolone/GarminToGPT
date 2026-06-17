@@ -118,6 +118,7 @@ export default function HomePage() {
 
   const openLogs = useCallback(async (service: string) => {
     setLogsService(service);
+    setLogs(null);
     setError(null);
     try {
       setLogs(await api.logs(service));
