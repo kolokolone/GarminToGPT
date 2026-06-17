@@ -36,6 +36,7 @@ export interface GarminAuthStatus {
 export interface GarminAuthResult {
   ok: boolean;
   assisted: boolean;
+  needs_otp: boolean;
   message: string;
   command: string[] | null;
   status: GarminAuthStatus;

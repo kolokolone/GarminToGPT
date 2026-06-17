@@ -1,4 +1,7 @@
+import os
 import shutil
+import subprocess
+import threading
 from pathlib import Path
 
 from app.core.config import Settings
@@ -58,19 +61,192 @@ class GarminAuthService:
         password: str | None = None,
         otp: str | None = None,
     ) -> GarminAuthResult:
-        _ = (email, password, otp)
+        # --- Assisted flow (no credentials) — backward compat ---
+        if not email or not password:
+            status = (
+                self.verify_garmin_auth()
+                if self.has_garmin_token()
+                else self._status_no_token()
+            )
+            return GarminAuthResult(
+                ok=False,
+                assisted=True,
+                message=(
+                    "L'authentification Garmin MCP est traitée comme un flux assisté: exécute la "
+                    "commande indiquée dans un terminal local, puis clique sur Vérifier. Aucun mot "
+                    "de passe n'est stocké par GarminToGPT."
+                ),
+                command=self.settings.garmin.auth_command,
+                status=status,
+            )
+
+        # --- Interactive flow via subprocess ---
+        if otp:
+            return self._complete_auth_with_otp(email, password, otp)
+        return self._initiate_auth_flow(email, password)
+
+    def _initiate_auth_flow(self, email: str, password: str) -> GarminAuthResult:
+        """Premier appel: envoie email/password, détecte si MFA est requis."""
+        env = self._auth_env(email, password)
+        process = subprocess.Popen(
+            self.settings.garmin.auth_command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        collected_stdout: list[str] = []
+        collected_stderr: list[str] = []
+        mfa_detected = threading.Event()
+
+        def _reader(stream, dest, stop_on_mfa: bool = False) -> None:
+            for line in iter(stream.readline, ""):
+                line_str = line.rstrip("\n\r")
+                dest.append(line_str)
+                if stop_on_mfa and "Enter MFA code" in line_str:
+                    mfa_detected.set()
+                    break
+
+        t_out = threading.Thread(
+            target=_reader, args=(process.stdout, collected_stdout, True), daemon=True
+        )
+        t_err = threading.Thread(
+            target=_reader, args=(process.stderr, collected_stderr, False), daemon=True
+        )
+        t_out.start()
+        t_err.start()
+
+        # Attendre max 20 s pour le prompt MFA ou la fin du processus
+        mfa_detected.wait(timeout=20)
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+        t_out.join(timeout=3)
+        t_err.join(timeout=3)
+
+        output = "\n".join(collected_stdout + collected_stderr)
         status = self.verify_garmin_auth() if self.has_garmin_token() else self._status_no_token()
+
+        if mfa_detected.is_set():
+            return GarminAuthResult(
+                ok=False,
+                needs_otp=True,
+                message=(
+                    "Un code de vérification a été envoyé à ton email/phone Garmin."
+                    " Saisis-le ci-dessous."
+                ),
+                status=status,
+            )
+
+        if process.returncode == 0 and status.token_valid:
+            return GarminAuthResult(
+                ok=True,
+                message="Authentification Garmin réussie.",
+                status=status,
+            )
+
         return GarminAuthResult(
             ok=False,
-            assisted=True,
-            message=(
-                "L'authentification Garmin MCP est traitée comme un flux assisté: exécute la "
-                "commande indiquée dans un terminal local, puis clique sur Vérifier. Aucun mot "
-                "de passe n'est stocké par GarminToGPT."
-            ),
-            command=self.settings.garmin.auth_command,
+            message=self._clean_auth_message(output),
             status=status,
         )
+
+    def _complete_auth_with_otp(self, email: str, password: str, otp: str) -> GarminAuthResult:
+        """Second appel: email/password + OTP pour finaliser l'auth."""
+        env = self._auth_env(email, password)
+        process = subprocess.Popen(
+            self.settings.garmin.auth_command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        collected_stdout: list[str] = []
+        collected_stderr: list[str] = []
+
+        def _reader(stream, dest) -> None:
+            for line in iter(stream.readline, ""):
+                dest.append(line.rstrip("\n\r"))
+
+        t_out = threading.Thread(
+            target=_reader, args=(process.stdout, collected_stdout), daemon=True
+        )
+        t_err = threading.Thread(
+            target=_reader, args=(process.stderr, collected_stderr), daemon=True
+        )
+        t_out.start()
+        t_err.start()
+
+        try:
+            # Laisser le temps au processus de démarrer et d'arriver au prompt MFA
+            import time
+            time.sleep(2)
+            process.stdin.write(otp + "\n")
+            process.stdin.flush()
+            process.stdin.close()
+        except OSError:
+            pass
+
+        try:
+            process.wait(timeout=self.settings.timeouts.process_start_seconds)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+
+        t_out.join(timeout=3)
+        t_err.join(timeout=3)
+
+        status = self.verify_garmin_auth() if self.has_garmin_token() else self._status_no_token()
+
+        if process.returncode == 0 and status.token_valid:
+            return GarminAuthResult(
+                ok=True,
+                message="Authentification Garmin réussie.",
+                status=status,
+            )
+
+        output = "\n".join(collected_stdout + collected_stderr)
+        return GarminAuthResult(
+            ok=False,
+            needs_otp=True,
+            message=self._clean_auth_message(output),
+            status=status,
+        )
+
+    @staticmethod
+    def _clean_auth_message(output: str) -> str:
+        """Nettoie le message d'erreur pour l'utilisateur."""
+        output = output.replace("✗", "").replace("✓", "").strip()
+        lines = [ln for ln in output.split("\n") if ln.strip()]
+        # Prendre les lignes pertinentes (ignorer les titres/bannières)
+        keywords = ("error", "fail", "rate", "invalid", "incorrect", "expired", "MFA")
+        relevant = [ln for ln in lines if any(k in ln.lower() for k in keywords)]
+        if relevant:
+            return relevant[-1].strip()
+        if lines:
+            return lines[-1].strip()
+        return "Erreur d'authentification. Vérifie tes identifiants et réessaie."
+
+    @staticmethod
+    def _auth_env(email: str, password: str) -> dict[str, str]:
+        env = os.environ.copy()
+        env["GARMIN_EMAIL"] = email
+        env["GARMIN_PASSWORD"] = password
+        env.setdefault("PYTHONIOENCODING", "utf-8")
+        env.setdefault("PYTHONUTF8", "1")
+        return env
 
     def reauthenticate(self) -> GarminAuthResult:
         return self.start_garmin_auth()

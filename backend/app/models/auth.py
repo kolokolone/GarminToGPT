@@ -23,7 +23,8 @@ class GarminLoginRequest(BaseModel):
 
 class GarminAuthResult(BaseModel):
     ok: bool
-    assisted: bool
+    assisted: bool = False
+    needs_otp: bool = False
     message: str
     command: list[str] | None = None
     status: GarminAuthStatus
