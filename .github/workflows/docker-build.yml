@@ -15,6 +15,6 @@ jobs:
         with:
           context: .
           push: false
-          tags: garmin-to-gpt:validation
+          tags: garmintogpt:validation
           cache-from: type=gha
           cache-to: type=gha,mode=max
