@@ -48,7 +48,9 @@ class McpService:
 
     def start_mcp_service(self):
         command = self.settings.mcp.proxy_command or self.settings.mcp.command
-        result = self.process_manager.start("mcp", command, port=self.settings.mcp.port)
+        result = self.process_manager.start(
+            "mcp", command, port=self.settings.mcp.port, reset_log=True
+        )
         if result.ok:
             self._last_started_at = utc_now_iso()
             self._last_error = None
