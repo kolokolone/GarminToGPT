@@ -10,6 +10,9 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -46,6 +49,13 @@ MCP_HEADERS = {
     "Accept": "application/json, text/event-stream",
 }
 
+_SESSION_DELETE_OK_STATUSES = {200, 202, 204}
+
+
+@dataclass(slots=True)
+class _McpSession:
+    session_id: str | None = None
+
 
 async def probe_mcp_endpoint(
     base_url: str,
@@ -67,13 +77,14 @@ async def probe_mcp_endpoint(
 
     logger.info("MCP probe starting – target=%s", mcp_url)
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds)) as client:
+    async with _session_closing_client(mcp_url, timeout_seconds) as (client, session):
 
         # ── Step 1: initialize ──────────────────────────────────────────
         step_name = "initialize"
         t0 = time.perf_counter()
         try:
             resp = await client.post(mcp_url, json=_INITIALIZE_PAYLOAD, headers=MCP_HEADERS)
+            session.session_id = resp.headers.get("Mcp-Session-Id")
             elapsed = _ms_since(t0)
         except httpx.RequestError as exc:
             elapsed = _ms_since(t0)
@@ -130,7 +141,7 @@ async def probe_mcp_endpoint(
         result.protocol_version = init_result.get("protocolVersion")
 
         # Check for Mcp-Session-Id header
-        session_id = resp.headers.get("Mcp-Session-Id")
+        session_id = session.session_id
         if session_id:
             result.session_id = session_id
             steps[-1].detail += f" (session: {session_id[:16]}…)"
@@ -256,6 +267,46 @@ async def probe_mcp_endpoint(
         )
 
         return result
+
+
+@asynccontextmanager
+async def _session_closing_client(
+    mcp_url: str,
+    timeout_seconds: float,
+) -> AsyncIterator[tuple[httpx.AsyncClient, _McpSession]]:
+    session = _McpSession()
+    async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds)) as client:
+        try:
+            yield client, session
+        finally:
+            if session.session_id:
+                await _close_mcp_session(client, mcp_url, session.session_id)
+
+
+async def _close_mcp_session(
+    client: httpx.AsyncClient,
+    mcp_url: str,
+    session_id: str,
+) -> None:
+    headers = dict(MCP_HEADERS)
+    headers["Mcp-Session-Id"] = session_id
+
+    try:
+        response = await client.delete(mcp_url, headers=headers)
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "MCP probe session cleanup failed (session=%s): %s",
+            session_id[:16],
+            exc,
+        )
+        return
+
+    if response.status_code not in _SESSION_DELETE_OK_STATUSES:
+        logger.warning(
+            "MCP probe session cleanup returned HTTP %d (session=%s)",
+            response.status_code,
+            session_id[:16],
+        )
 
 
 def _step(
