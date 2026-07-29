@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import yaml
 from app.core.config import Settings
 from app.utils.redact import redact_text
 
@@ -28,9 +29,27 @@ def test_redact_text_masks_sensitive_values() -> None:
     assert "[REDACTED]" in redacted
 
 
+def test_packaged_garmin_commands_constrain_mcp_to_v1() -> None:
+    project_root = Path(__file__).resolve().parents[3]
+
+    for config_name in ("app.yaml", "app.example.yaml"):
+        with (project_root / "config" / config_name).open(encoding="utf-8") as config_file:
+            config = yaml.safe_load(config_file)
+
+        commands = (
+            config["mcp"]["command"],
+            config["mcp"]["proxy_command"],
+            config["garmin"]["auth_command"],
+            config["garmin"]["verify_command"],
+        )
+        for command in commands:
+            with_index = command.index("--with")
+            assert command[with_index + 1] == "mcp>=1.28.1,<2"
+
+
 def _settings_dict() -> dict[str, object]:
     return {
-        "app": {"name": "GarminToGPT", "version": "0.4.11", "environment": "test"},
+        "app": {"name": "GarminToGPT", "version": "0.4.12", "environment": "test"},
         "server": {"host": "127.0.0.1", "backend_port": 8000, "frontend_port": 3000},
         "mcp": {
             "host": "127.0.0.1",

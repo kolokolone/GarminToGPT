@@ -67,7 +67,7 @@ Le compose expose uniquement `127.0.0.1:8000`. Les tokens Garmin restent hors im
 GarminToGPT ne stocke pas le mot de passe Garmin. Le flux `/connexion` détecte les tokens existants et affiche une procédure assistée basée sur la commande officielle :
 
 ```powershell
-uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
+uvx --python 3.12 --with "mcp>=1.28.1,<2" --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
 ```
 
 Après l’auth, clique sur `Vérifier puis démarrer` pour lancer le proxy MCP puis Cloudflare.

@@ -1,6 +1,6 @@
 app:
   name: GarminToGPT
-  version: 0.4.11
+  version: 0.4.12
   environment: local
 
 server:
@@ -17,6 +17,8 @@ mcp:
     - uvx
     - --python
     - "3.12"
+    - --with
+    - "mcp>=1.28.1,<2"
     - --from
     - git+https://github.com/Taxuspt/garmin_mcp
     - garmin-mcp
@@ -31,6 +33,8 @@ mcp:
     - uvx
     - --python
     - "3.12"
+    - --with
+    - "mcp>=1.28.1,<2"
     - --from
     - git+https://github.com/Taxuspt/garmin_mcp
     - garmin-mcp
@@ -40,6 +44,8 @@ garmin:
     - uvx
     - --python
     - "3.12"
+    - --with
+    - "mcp>=1.28.1,<2"
     - --from
     - git+https://github.com/Taxuspt/garmin_mcp
     - garmin-mcp-auth
@@ -47,6 +53,8 @@ garmin:
     - uvx
     - --python
     - "3.12"
+    - --with
+    - "mcp>=1.28.1,<2"
     - --from
     - git+https://github.com/Taxuspt/garmin_mcp
     - garmin-mcp-auth
