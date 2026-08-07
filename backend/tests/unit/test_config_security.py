@@ -29,20 +29,32 @@ def test_redact_text_masks_sensitive_values() -> None:
     assert "[REDACTED]" in redacted
 
 
-def test_packaged_garmin_commands_constrain_mcp_to_v1() -> None:
+def test_packaged_mcp_commands_constrain_proxy_and_garmin_to_v1() -> None:
     project_root = Path(__file__).resolve().parents[3]
 
     for config_name in ("app.yaml", "app.example.yaml"):
         with (project_root / "config" / config_name).open(encoding="utf-8") as config_file:
             config = yaml.safe_load(config_file)
 
-        commands = (
+        proxy_command = config["mcp"]["proxy_command"]
+        proxy_executable_index = proxy_command.index("mcp-proxy")
+        assert proxy_command[:proxy_executable_index] == [
+            "uvx",
+            "--python",
+            "3.12",
+            "--from",
+            "mcp-proxy==0.12.0",
+            "--with",
+            "mcp>=1.28.1,<2",
+        ]
+
+        garmin_commands = (
             config["mcp"]["command"],
-            config["mcp"]["proxy_command"],
+            proxy_command[proxy_command.index("--") + 1 :],
             config["garmin"]["auth_command"],
             config["garmin"]["verify_command"],
         )
-        for command in commands:
+        for command in garmin_commands:
             with_index = command.index("--with")
             assert command[with_index + 1] == "mcp>=1.28.1,<2"
 

@@ -24,6 +24,12 @@ mcp:
     - garmin-mcp
   proxy_command:
     - uvx
+    - --python
+    - "3.12"
+    - --from
+    - "mcp-proxy==0.12.0"
+    - --with
+    - "mcp>=1.28.1,<2"
     - mcp-proxy
     - --host
     - 127.0.0.1

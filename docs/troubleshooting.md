@@ -12,6 +12,13 @@ Va sur `/connexion`, relance la procédure assistée, puis clique sur `Vérifier
 
 Le proxy MCP utilise `127.0.0.1:8080`. Arrête l’autre service ou modifie `config/app.yaml`.
 
+## `ImportError: request_ctx` au démarrage MCP
+
+Cette erreur indique que `mcp-proxy` a été lancé avec le SDK MCP 2.x alors que sa version
+actuelle utilise encore l'API v1 `request_ctx`. La commande fournie par GarminToGPT fige
+`mcp-proxy==0.12.0` et contraint son environnement à `mcp>=1.28.1,<2`. Conserve la contrainte
+sur le proxy lui-même, avant l'argument exécutable `mcp-proxy`, jusqu'à la migration MCP 2.0.
+
 ## Cloudflare 1033 ou 530
 
 Ces erreurs signalent généralement que Cloudflare ne rejoint plus le service local. Vérifie que MCP répond localement sur `/mcp`, puis régénère le tunnel.
