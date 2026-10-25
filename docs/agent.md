@@ -1,6 +1,6 @@
 # GarminToGPT — Agent UI Guidelines
 
-Ce document décrit l’interface actuelle (v1.1.1). Lire aussi
+Ce document décrit l’interface actuelle (v1.1.5). Lire aussi
 `docs/architecture.md`, `docs/openai-tunnel.md` et `docs/security.md`.
 
 ## Principes

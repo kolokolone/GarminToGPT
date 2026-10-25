@@ -65,7 +65,7 @@ workspace.
 
 ## `connection refused` sur 8080 au démarrage
 
-Le tunnel a démarré avant `mcp-proxy`. La version 1.1.1 attend le listener MCP
+Le tunnel a démarré avant `mcp-proxy`. La version actuelle attend le listener MCP
 avant le premier poll. Après mise à jour, redémarre le backend puis le tunnel
 depuis `/tunnel`.
 

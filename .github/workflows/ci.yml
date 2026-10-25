@@ -23,7 +23,7 @@ jobs:
         run: uv run pytest
       - name: Frontend install
         working-directory: frontend
-        run: npm install
+        run: npm ci --no-audit --no-fund
       - name: Frontend typecheck
         working-directory: frontend
         run: npm run typecheck

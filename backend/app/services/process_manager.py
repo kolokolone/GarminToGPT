@@ -149,6 +149,8 @@ class ProcessManager:
                 check=False,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             try:
                 process.wait(timeout=self.settings.timeouts.process_stop_seconds)
@@ -204,6 +206,8 @@ class ProcessManager:
                 ["powershell", "-NoProfile", "-Command", ps_cmd],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
             if result.returncode != 0:
@@ -224,6 +228,8 @@ class ProcessManager:
                 ],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
             if result2.returncode != 0:
@@ -260,6 +266,8 @@ class ProcessManager:
                 ["ss", "-tlnp", f"sport = :{port}"],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=5,
             )
             pid_match = re.search(r"pid=(\d+)", result.stdout)
@@ -274,6 +282,8 @@ class ProcessManager:
                     ["ps", "-p", pid, "-o", "args="],
                     capture_output=True,
                     text=True,
+                    encoding="utf-8",
+                    errors="replace",
                     timeout=5,
                 )
                 cmdline = result2.stdout or ""

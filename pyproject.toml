@@ -1,7 +1,7 @@
 [project]
 name = "GarminToGPT"
-version = "1.1.4"
-description = "Local Garmin MCP bridge for ChatGPT via Cloudflare Tunnel"
+version = "1.1.5"
+description = "Local Garmin MCP bridge for ChatGPT via OpenAI Secure MCP Tunnel"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.116.0",

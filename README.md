@@ -1,6 +1,6 @@
 # GarminToGPT
 
-**Version 1.1.4**
+**Version 1.1.5**
 
 GarminToGPT est une application locale qui connecte ChatGPT à Garmin Connect avec :
 

@@ -1,0 +1,43 @@
+# Secrets et état local : jamais envoyés au daemon Docker.
+.env
+.env.*
+garmin.env
+garmin.env.*
+garmintogpt/
+data/
+logs/
+runtime/
+pids/
+state.json
+*.log
+
+# Python : caches et tests non nécessaires au runtime.
+.venv/
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+backend/tests/
+
+# Frontend : dépendances hôte, exports et tests.
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/**/*.test.*
+frontend/**/__tests__/
+
+# Dépôt, documentation et artefacts locaux.
+.git/
+.github/
+.agents/
+docs/
+*.md
+AUDIT_*
+archive/
+out/
+v/
+
+# Caches et fichiers de build.
+*.tsbuildinfo
+*.tmp

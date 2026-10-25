@@ -4,16 +4,12 @@
 garmin.env
 garmin.env.*
 
-logs/*
-!logs/.gitkeep
-runtime/*
-!runtime/.gitkeep
-!runtime/pids/
-runtime/pids/*
-!runtime/pids/.gitkeep
+logs/
+runtime/
 data/
 garmintogpt/appdata/*
 !garmintogpt/appdata/.gitkeep
+AUDIT_*.md
 
 *.log
 *.pid
