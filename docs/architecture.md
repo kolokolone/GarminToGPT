@@ -1,4 +1,4 @@
-# Architecture GarminToGPT 1.1.3
+# Architecture GarminToGPT 1.1.4
 
 GarminToGPT sépare strictement l’UI, l’API et les effets de bord système.
 
@@ -27,6 +27,10 @@ Le frontend appelle uniquement `/api/*`. Il ne lance jamais de processus.
 
 Le backend est responsable des PID, logs, redaction, healthchecks, endpoints
 stables et de l’état du tunnel.
+
+En Docker, tout l’état persistant est monté dans `/appdata` depuis
+`./garmintogpt/appdata` ; l’entrypoint relie `runtime/`, `logs/` et
+`~/.config/garmin*` vers ce dossier.
 
 ## Garmin Personal MCP
 
@@ -61,7 +65,7 @@ healthcheck local est exposé sur `127.0.0.1:8091` (`/readyz`, `/ui`,
 `/metrics`).
 
 Le binaire est épinglé `v0.0.18`, téléchargé avec vérification SHA-256 dans
-`runtime/bin` (Windows/Linux) ou installé dans l’image Docker. Le client attend
+`runtime/bin`, ou installé dans l’image Docker. Le client attend
 le listener MCP local jusqu’à 90 s (`--mcp.startup-wait-timeout`) avant le
 premier poll OpenAI.
 

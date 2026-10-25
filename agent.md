@@ -22,7 +22,7 @@ Clé API personnelle Garmin (GCDC_…)
 
 - Backend : FastAPI, Python 3.12, `uv`.
 - Frontend : Next.js 16, React 19, export statique dans `frontend/out`.
-- Version applicative : **1.1.3**.
+- Version applicative : **1.1.4**.
 - Tunnel : `openai/tunnel-client` épinglé `v0.0.18`.
 - Aucune URL publique, aucun port entrant pour le tunnel.
 
@@ -47,7 +47,7 @@ La clé Garmin vit dans `~/.config/garmin/connect-personal-api-key` (ou
 `GARMIN_PERSONAL_API_KEY`). La clé API ChatGPT vit dans
 `~/.config/garmintogpt/openai-tunnel-key` (ou `CONTROL_PLANE_API_KEY` /
 `OPENAI_API_KEY`). Les fichiers ignorés incluent `.env`, `garmin.env`, logs,
-runtime, data et secrets.
+runtime, `garmintogpt/appdata` et secrets.
 
 ## 4. Comportements attendus
 
@@ -62,12 +62,12 @@ runtime, data et secrets.
 ## 5. Commandes
 
 ```powershell
-.\start.bat                  # build frontend + backend complet
-.\scripts\dev.ps1            # dev UI 3000 + API 8000
-.\scripts\test.ps1           # ruff + pytest + typecheck + vitest + build
+docker compose up -d --build  # service complet
+docker compose logs -f garmintogpt
+docker compose down
 ```
 
-Équivalents :
+Tests :
 
 ```powershell
 uv run ruff check backend

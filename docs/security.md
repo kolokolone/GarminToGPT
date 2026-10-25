@@ -48,22 +48,22 @@ Références :
 
 ## Persistance Docker
 
-Les clés sont dans des bind mounts visibles sur l’hôte, hors Git :
+Tout l’état est dans un seul bind mount visible sur l’hôte, hors Git :
 
-- `./data/garmin` : clé Garmin + cache de jeton ;
-- `./data/garmintogpt` : tunnel ID + clé API ChatGPT.
+- `./garmintogpt/appdata/config/garmin` : clé Garmin + cache de jeton ;
+- `./garmintogpt/appdata/config/garmintogpt` : tunnel ID + clé API ChatGPT ;
+- `./garmintogpt/appdata/logs` : logs ;
+- `./garmintogpt/appdata/runtime` : état, PID et binaires runtime.
 
-`garmintogpt_runtime` et `garmintogpt_logs` restent des volumes nommés pour
-l’état et les logs. Les bind mounts survivent aux mises à jour d’image, à la
-recréation du conteneur et à `docker compose down -v`. Sauvegarde `./data`.
-L’entrypoint migre les anciens volumes `garmintogpt_garmin`/`garmintogpt_openai`
-(v1.1.2) vers `./data` au premier démarrage, sans écraser l’existant.
+Ce dossier survit aux mises à jour d’image, à la recréation du conteneur et à
+`docker compose down -v`. Sauvegarde `./garmintogpt/appdata`. Aucune migration
+automatique n’est effectuée.
 
 ## Fichiers ignorés
 
-`.env`, `garmin.env`, logs, runtime, data, clés, jetons, secrets et mots de
-passe ne doivent jamais être versionnés. `runtime/bin` (binaire téléchargé) est
-sous `runtime/`.
+`.env`, `garmin.env`, logs, runtime, `garmintogpt/appdata`, clés, jetons,
+secrets et mots de passe ne doivent jamais être versionnés. Le binaire
+téléchargé est sous `runtime/bin`, donc dans `garmintogpt/appdata`.
 
 ## MCP et outils d’écriture
 

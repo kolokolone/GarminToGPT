@@ -12,20 +12,8 @@ services:
     ports:
       - "127.0.0.1:8000:8000"
 
-    environment:
-      GARMINTOGPT_ENV: local
-      GARMINTOGPT_CONFIG: /app/config/app.yaml
-      GARMINTOGPT_LOG_LEVEL: INFO
-      PYTHONUNBUFFERED: "1"
-
     volumes:
-      - garmintogpt_logs:/app/logs
-      - garmintogpt_runtime:/app/runtime
-      - ./data/garmin:/home/app/.config/garmin
-      - ./data/garmintogpt:/home/app/.config/garmintogpt
-      # Legacy named volumes: migrated automatically by the entrypoint.
-      - garmintogpt_garmin:/legacy/garmin:ro
-      - garmintogpt_openai:/legacy/garmintogpt:ro
+      - ./garmintogpt/appdata:/appdata
 
     healthcheck:
       test: ["CMD", "gosu", "app", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=5)"]
@@ -35,9 +23,3 @@ services:
       retries: 3
 
     stop_grace_period: 30s
-
-volumes:
-  garmintogpt_logs:
-  garmintogpt_runtime:
-  garmintogpt_garmin:
-  garmintogpt_openai:

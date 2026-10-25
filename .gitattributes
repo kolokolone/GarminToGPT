@@ -1,0 +1,5 @@
+# Shell scripts and the Dockerfile must stay LF: Docker builds on Windows
+# checkouts would otherwise receive CRLF and fail to execute the entrypoint.
+*.sh text eol=lf
+docker/entrypoint.sh text eol=lf
+Dockerfile text eol=lf

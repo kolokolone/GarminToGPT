@@ -27,15 +27,12 @@ COPY backend ./backend
 COPY config ./config
 COPY --from=frontend-build /src/frontend/out ./frontend/out
 
-RUN useradd --create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /app/logs /app/runtime/pids /home/app/.config/garmin /home/app/.config/garmintogpt \
-    && chown -R app:app /app /home/app/.config
+RUN useradd --create-home --shell /usr/sbin/nologin app
 
 COPY docker/entrypoint.sh /usr/local/bin/garmintogpt-entrypoint
 RUN chmod +x /usr/local/bin/garmintogpt-entrypoint
 
-ENV GARMINTOGPT_ENV=local
-ENV GARMINTOGPT_CONFIG=/app/config/app.yaml
+ENV PYTHONUNBUFFERED=1
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD ["gosu", "app", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=5)"]

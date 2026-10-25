@@ -11,14 +11,9 @@ runtime/*
 !runtime/pids/
 runtime/pids/*
 !runtime/pids/.gitkeep
-data/*
-!data/.gitkeep
-!data/garmin/
-data/garmin/*
-!data/garmin/.gitkeep
-!data/garmintogpt/
-data/garmintogpt/*
-!data/garmintogpt/.gitkeep
+data/
+garmintogpt/appdata/*
+!garmintogpt/appdata/.gitkeep
 
 *.log
 *.pid

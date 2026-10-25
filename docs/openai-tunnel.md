@@ -26,10 +26,10 @@ docker compose up -d --build
 ```
 
 Ouvre `http://127.0.0.1:8000/tunnel` et enregistre le `tunnel_id` et la clé API
-ChatGPT. Les clés sont dans les bind mounts `./data/garmin` et
-`./data/garmintogpt` (hors Git) : elles survivent aux mises à jour d’image et à
-`docker compose down -v`. L’entrypoint migre les anciens volumes nommés
-`garmintogpt_garmin`/`garmintogpt_openai` au premier démarrage.
+ChatGPT. Les clés sont dans `./garmintogpt/appdata/config/garmin` et
+`./garmintogpt/appdata/config/garmintogpt` (hors Git) : elles survivent aux
+mises à jour d’image et à `docker compose down -v`. Aucune migration
+automatique n’est effectuée.
 
 ## Configuration dans l’application
 
@@ -121,7 +121,7 @@ renseigne `tunnel.command` dans `config/app.yaml`.
 - `No usable tunnel` / 401 : clé invalide, expirée, ou permissions Tunnels
   Read + Use absentes.
 - 404 : `tunnel_id` erroné ou hors du workspace OpenAI.
-- `/readyz` reste en 503 : vérifie les logs `logs/tunnel.log`, l’accès sortant
+- `/readyz` reste en 503 : vérifie `./garmintogpt/appdata/logs/tunnel.log`, l’accès sortant
   vers `api.openai.com`, et que `mcp-proxy` répond sur `127.0.0.1:8080/mcp`.
 - `connection refused` sur 8080 au démarrage : le tunnel attend désormais MCP
   jusqu’à 90 s ; si le premier démarrage est plus long, augmente

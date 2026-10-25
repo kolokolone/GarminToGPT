@@ -54,7 +54,7 @@ workspace.
 
 ## `/readyz` reste en 503 ou refuse la connexion
 
-- Vérifie `logs/tunnel.log`.
+- Vérifie `./garmintogpt/appdata/logs/tunnel.log`.
 - Vérifie l’accès sortant HTTPS vers `api.openai.com:443`.
 - Vérifie que `mcp-proxy` répond sur `http://127.0.0.1:8080/mcp`.
 - Le client attend le MCP local jusqu’à 90 s (`--mcp.startup-wait-timeout`).
@@ -103,16 +103,15 @@ modifie `tunnel.health_port` dans `config/app.yaml`.
 
 ## Docker et persistance des clés
 
-Les clés sont dans `./data/garmin` et `./data/garmintogpt` (bind mounts hôte,
-hors Git). Elles survivent aux mises à jour d’image, à la recréation du
-conteneur et à `docker compose down -v`. `garmintogpt_runtime`/`garmintogpt_logs`
-sont des volumes nommés non sensibles.
-
-Si tu viens d’un ancien compose qui montait `.garminconnect`, les clés v1.1.x
-étaient dans la couche du conteneur. Copie-les avant de recréer :
-`docker cp garmintogpt:/home/app/.config/garmin/. ./data/garmin/` et idem pour
-`/home/app/.config/garmintogpt`. Sinon, ressaisis-les une fois : le nouveau
-compose les conservera.
+Tout l’état est dans `./garmintogpt/appdata` (bind mount hôte, hors Git) :
+`config/garmin`, `config/garmintogpt`, `logs` et `runtime`. Il survit aux mises
+à jour d’image, à la recréation du conteneur et à `docker compose down -v`.
+Aucune migration automatique n’est effectuée. Si des clés existent encore dans
+un ancien conteneur, copie-les avant de le supprimer :
+`docker cp garmintogpt:/home/app/.config/garmin/. ./garmintogpt/appdata/config/garmin/`
+et idem pour `/home/app/.config/garmintogpt` vers
+`./garmintogpt/appdata/config/garmintogpt`. Sinon, ressaisis-les une fois dans
+`/connexion` et `/tunnel`.
 
 Le healthcheck `/ui` du tunnel est interne au conteneur (loopback) ;
 l’application lit `/readyz` depuis le backend.

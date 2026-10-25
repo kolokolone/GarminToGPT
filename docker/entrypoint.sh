@@ -1,25 +1,28 @@
 #!/bin/sh
 set -eu
 
-CONFIG_ROOT="${CONFIG_ROOT:-/home/app/.config}"
-LEGACY_GARMIN="${LEGACY_GARMIN:-/legacy/garmin}"
-LEGACY_GARMINTOGPT="${LEGACY_GARMINTOGPT:-/legacy/garmintogpt}"
+DATA_ROOT="${DATA_ROOT:-/appdata}"
+APP_ROOT="${APP_ROOT:-/app}"
+HOME_ROOT="${HOME_ROOT:-/home/app}"
 
-mkdir -p "$CONFIG_ROOT/garmin" "$CONFIG_ROOT/garmintogpt"
-mkdir -p /app/logs /app/runtime 2>/dev/null || true
+mkdir -p \
+    "$DATA_ROOT/config/garmin" \
+    "$DATA_ROOT/config/garmintogpt" \
+    "$DATA_ROOT/runtime" \
+    "$DATA_ROOT/logs"
+mkdir -p "$APP_ROOT" "$HOME_ROOT/.config"
 
-# One-time migration from the named volumes used by <= 1.1.2. Existing files
-# in the bind mount win; missing files are copied from the legacy volume.
-for pair in "garmin:$LEGACY_GARMIN" "garmintogpt:$LEGACY_GARMINTOGPT"; do
-    target="$CONFIG_ROOT/${pair%%:*}"
-    legacy="${pair#*:}"
-    if [ -d "$legacy" ]; then
-        cp -an "$legacy"/. "$target"/ 2>/dev/null || true
-    fi
-done
+# Route the app defaults (runtime/, logs/, ~/.config/garmin, ~/.config/garmintogpt)
+# into the single persistent /appdata bind mount.
+rm -rf "$HOME_ROOT/.config/garmin" "$HOME_ROOT/.config/garmintogpt"
+ln -s "$DATA_ROOT/config/garmin" "$HOME_ROOT/.config/garmin"
+ln -s "$DATA_ROOT/config/garmintogpt" "$HOME_ROOT/.config/garmintogpt"
 
-# Bind mounts created by Docker may be root-owned on Linux. Fix ownership
-# without making startup fail on platforms where chown is not permitted.
-chown -R app:app "$CONFIG_ROOT" /app/logs /app/runtime 2>/dev/null || true
+rm -rf "$APP_ROOT/runtime" "$APP_ROOT/logs"
+ln -s "$DATA_ROOT/runtime" "$APP_ROOT/runtime"
+ln -s "$DATA_ROOT/logs" "$APP_ROOT/logs"
+
+chown -R app:app "$DATA_ROOT" "$HOME_ROOT/.config" 2>/dev/null || true
+export HOME="$HOME_ROOT"
 
 exec gosu app "$@"
