@@ -31,17 +31,18 @@ Ouvre `/tunnel`. Il faut :
 
 - un `tunnel_id` créé dans
   [Platform → Tunnels](https://platform.openai.com/settings/organization/tunnels) ;
-- une runtime API key créée dans
+- une **clé API ChatGPT** créée dans
   [Platform → Runtime API keys](https://platform.openai.com/settings/organization/api-keys)
   avec Tunnels **Read + Use**.
 
-Le `tunnel_id` seul ne suffit pas : `tunnel-client run` exige la runtime key.
+Le `tunnel_id` seul ne suffit pas : `tunnel-client run` exige la clé.
 La page `/tunnel` vérifie les deux valeurs via `tunnel-client admin tunnels get`
-avant de les enregistrer.
+avant de les enregistrer. Voir le
+[guide Secure MCP Tunnels](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
 
 ## 401 / 403 à la validation du tunnel
 
-La runtime key est invalide, expirée, ou n’a pas les permissions Tunnels
+La clé API ChatGPT est invalide, expirée, ou n’a pas les permissions Tunnels
 Read + Use. Une admin key ne doit pas être utilisée pour le daemon. Crée une
 runtime key dédiée et réessaie.
 
@@ -56,8 +57,17 @@ workspace.
 - Vérifie `logs/tunnel.log`.
 - Vérifie l’accès sortant HTTPS vers `api.openai.com:443`.
 - Vérifie que `mcp-proxy` répond sur `http://127.0.0.1:8080/mcp`.
+- Le client attend le MCP local jusqu’à 90 s (`--mcp.startup-wait-timeout`).
+  Si le premier démarrage de `mcp-proxy`/`garmin-personal-mcp` est plus long,
+  augmente `tunnel.mcp_startup_timeout_seconds`.
 - Vérifie qu’aucun autre processus n’occupe le port 8091.
 - Le client doit rester démarré pour les appels MCP.
+
+## `connection refused` sur 8080 au démarrage
+
+Le tunnel a démarré avant `mcp-proxy`. La version 1.1.1 attend le listener MCP
+avant le premier poll. Après mise à jour, redémarre le backend puis le tunnel
+depuis `/tunnel`.
 
 ## Le tunnel n’apparaît pas dans ChatGPT
 

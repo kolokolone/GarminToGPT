@@ -2,9 +2,9 @@
 
 Priorité : sécurité, robustesse, diagnostic, simplicité.
 
-## Secrets Garmin
+## Clé API personnelle Garmin
 
-GarminToGPT ne stocke aucun mot de passe Garmin. La connexion utilise la clé
+GarminToGPT ne stocke pas de mot de passe Garmin. La connexion utilise la clé
 Personal API officielle, échangée contre un jeton de 24 h par
 `garmin-connect-personal-api-python`.
 
@@ -14,9 +14,10 @@ Personal API officielle, échangée contre un jeton de 24 h par
 - La clé et le jeton ne sont jamais renvoyés par l’API de statut et les logs
   passent par une redaction `GCDC_…`, JWT, `ApiKey` et `Bearer`.
 
-## Secrets OpenAI
+## Clé API ChatGPT / OpenAI
 
-Le tunnel utilise une **runtime API key** OpenAI avec Tunnels Read + Use.
+Le tunnel utilise une **clé API ChatGPT** (runtime key OpenAI) avec Tunnels
+Read + Use.
 
 - Clé : `~/.config/garmintogpt/openai-tunnel-key` (0600 best effort) ou
   `CONTROL_PLANE_API_KEY` / `OPENAI_API_KEY`.
@@ -27,6 +28,12 @@ Le tunnel utilise une **runtime API key** OpenAI avec Tunnels Read + Use.
 - La clé n’est jamais renvoyée par l’API ; seule une empreinte masquée est
   affichée.
 - Une admin key (`OPENAI_ADMIN_KEY`) ne doit pas être utilisée pour le daemon.
+
+Références :
+
+- [Secure MCP Tunnels](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
+- [openai/tunnel-client](https://github.com/openai/tunnel-client)
+- [Garmin Personal MCP](https://github.com/Mason-Levyy/garmin-personal-mcp)
 
 ## Tunnel OpenAI
 
@@ -47,5 +54,5 @@ sous `runtime/`.
 
 ## MCP et outils d’écriture
 
-La Personal API est en lecture seule. Les outils d’écriture de l’ancien serveur
-SSO ne sont plus exposés ; le proxy MCP ne doit exposer que les lectures.
+La Personal API est en lecture seule. Les outils d’écriture ne sont pas exposés ;
+le proxy MCP ne doit exposer que les lectures.

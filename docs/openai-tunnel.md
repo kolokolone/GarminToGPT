@@ -1,26 +1,29 @@
 # Tunnel OpenAI (Secure MCP Tunnel)
 
-GarminToGPT utilise le client officiel
-[`openai/tunnel-client`](https://github.com/openai/tunnel-client) pour relier le
-MCP local à ChatGPT. Le client se connecte **en sortie** au control plane
-OpenAI : aucun port entrant ni URL publique n’est créé.
+GarminToGPT relie [Garmin Personal MCP](https://github.com/Mason-Levyy/garmin-personal-mcp)
+à ChatGPT avec le client officiel
+[`openai/tunnel-client`](https://github.com/openai/tunnel-client), derrière le
+[Secure MCP Tunnel d’OpenAI](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels).
+Le client se connecte **en sortie** au control plane OpenAI : aucun port entrant
+ni URL publique n’est créé.
 
 ## Valeurs nécessaires
 
 | Valeur | Où la trouver | Secret |
 |---|---|---|
+| Clé API personnelle Garmin | Garmin Connect → Personal API | oui |
 | `tunnel_id` | Platform → Tunnels | non |
-| Runtime API key | Platform → Runtime API keys, permissions Tunnels **Read + Use** | oui |
+| Clé API ChatGPT (runtime key OpenAI) | Platform → Runtime API keys, Tunnels Read + Use | oui |
 | URL MCP locale | `http://127.0.0.1:8080/mcp` | non |
 
 Une **admin key** (`OPENAI_ADMIN_KEY`) ne doit pas être utilisée pour le daemon :
-elle sert uniquement à créer/lister/modifier/supprimer des tunnels.
+elle sert uniquement à créer, lister, modifier ou supprimer des tunnels.
 
 ## Configuration dans l’application
 
 Ouvre `http://127.0.0.1:8000/tunnel`.
 
-- Colle le `tunnel_id` et la runtime key.
+- Colle le `tunnel_id` et la clé API ChatGPT.
 - `Tester et enregistrer` exécute
   `tunnel-client admin --json tunnels get <tunnel_id>` avec la clé avant de
   sauvegarder. Un 401/403 signifie que la clé est invalide ou n’a pas les
@@ -49,15 +52,16 @@ tunnel-client run
 ```
 
 La clé est passée au processus par son environnement, jamais dans la ligne de
-commande. Le healthcheck est lu sur :
+commande. `--mcp.startup-wait-timeout` attend que `mcp-proxy` écoute avant le
+premier poll OpenAI (utile au premier lancement `uvx`). Le healthcheck est lu
+sur :
 
 - `http://127.0.0.1:8091/readyz` — état prêt ;
 - `http://127.0.0.1:8091/ui` — tableau de bord local ;
 - `http://127.0.0.1:8091/metrics` — métriques Prometheus.
 
 `mcp-proxy` continue d’écouter sur `127.0.0.1:8080/mcp` ; le tunnel s’y connecte
-en local. `--mcp.startup-wait-timeout 90s` laisse au proxy le temps de démarrer
-(et de s’installer au premier lancement) avant le premier poll OpenAI.
+en local, puis Garmin Personal MCP fournit les outils.
 
 ## Côté ChatGPT
 
@@ -68,7 +72,7 @@ en local. `--mcp.startup-wait-timeout 90s` laisse au proxy le temps de démarrer
 5. Garder le client démarré : il reçoit les appels MCP et les transfère au proxy
    local.
 
-Il n’y a **pas d’URL `https://…/mcp` à copier**. Le tunnel est identifié par son
+Il n’y a **pas d’URL publique** à copier. Le tunnel est identifié par son
 `tunnel_id` côté ChatGPT.
 
 ## Binaire
@@ -91,8 +95,8 @@ renseigne `tunnel.command` dans `config/app.yaml`.
 - Le healthcheck et le tableau de bord du client restent sur `127.0.0.1`.
 - Les requêtes/réponses MCP transitent par OpenAI ; le tunnel ne rend pas les
   données strictement locales.
-- La runtime key est un secret : ne la mets ni dans Git, ni dans un log, ni dans
-  la ligne de commande.
+- La clé API ChatGPT est un secret : ne la mets ni dans Git, ni dans un log, ni
+  dans la ligne de commande.
 
 ## Dépannage
 
@@ -101,6 +105,16 @@ renseigne `tunnel.command` dans `config/app.yaml`.
 - 404 : `tunnel_id` erroné ou hors du workspace OpenAI.
 - `/readyz` reste en 503 : vérifie les logs `logs/tunnel.log`, l’accès sortant
   vers `api.openai.com`, et que `mcp-proxy` répond sur `127.0.0.1:8080/mcp`.
+- `connection refused` sur 8080 au démarrage : le tunnel attend désormais MCP
+  jusqu’à 90 s ; si le premier démarrage est plus long, augmente
+  `tunnel.mcp_startup_timeout_seconds`.
 - Le tunnel n’apparaît pas dans ChatGPT : vérifie le workspace/les permissions
   du connecteur, puis attends la propagation côté OpenAI.
 - Port 8091 occupé : arrête l’ancien client ou change `tunnel.health_port`.
+
+## Références
+
+- [Secure MCP Tunnels](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)
+- [openai/tunnel-client](https://github.com/openai/tunnel-client)
+- [Garmin Personal MCP](https://github.com/Mason-Levyy/garmin-personal-mcp)
+- [Client officiel Garmin Personal API](https://github.com/garmin/connect-personal-api-python)
