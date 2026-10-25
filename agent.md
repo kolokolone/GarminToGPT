@@ -22,7 +22,7 @@ Clé API personnelle Garmin (GCDC_…)
 
 - Backend : FastAPI, Python 3.12, `uv`.
 - Frontend : Next.js 16, React 19, export statique dans `frontend/out`.
-- Version applicative : **1.1.2**.
+- Version applicative : **1.1.3**.
 - Tunnel : `openai/tunnel-client` épinglé `v0.0.18`.
 - Aucune URL publique, aucun port entrant pour le tunnel.
 

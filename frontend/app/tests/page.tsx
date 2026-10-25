@@ -7,7 +7,7 @@ import { TestCard } from "../../components/TestCard";
 import { api } from "../../lib/api";
 import type { TestDefinition, TestResult } from "../../lib/types";
 
-type GroupKey = "config" | "garmin" | "mcp" | "tunnel" | "chatgpt";
+type GroupKey = "config" | "garmin" | "mcp" | "tunnel" | "chatgpt" | "smoke";
 
 const GROUP_LABELS: Record<GroupKey, string> = {
   config: "PRÉ-REQUIS",
@@ -15,20 +15,17 @@ const GROUP_LABELS: Record<GroupKey, string> = {
   mcp: "MCP LOCAL",
   tunnel: "TUNNEL OPENAI",
   chatgpt: "CHATGPT",
+  smoke: "SMOKE TEST",
 };
 
-const GROUP_PREFIXES: { key: GroupKey; prefix: string }[] = [
-  { key: "config", prefix: "config-" },
-  { key: "garmin", prefix: "garmin-" },
-  { key: "mcp", prefix: "mcp-" },
-  { key: "tunnel", prefix: "tunnel-" },
-  { key: "chatgpt", prefix: "chatgpt-" },
-];
+const GROUP_ORDER: GroupKey[] = ["config", "garmin", "mcp", "tunnel", "chatgpt", "smoke"];
 
-function guessGroup(id: string): GroupKey {
-  for (const { key, prefix } of GROUP_PREFIXES) {
-    if (id.startsWith(prefix)) return key;
-  }
+function groupForTest(id: string): GroupKey {
+  if (id.startsWith("check_garmin")) return "garmin";
+  if (id.startsWith("check_mcp")) return "mcp";
+  if (id.startsWith("check_tunnel")) return "tunnel";
+  if (id.startsWith("check_chatgpt")) return "chatgpt";
+  if (id === "full_smoke_test") return "smoke";
   return "config";
 }
 
@@ -72,14 +69,13 @@ export default function TestsPage() {
   const values = Object.values(results);
   const okCount = values.filter((r) => r.state === "success").length;
   const failCount = values.filter((r) => r.state === "failed").length;
-  const skipCount = values.filter((r) => r.state === "skipped" || r.state === "not_run").length;
   const runningCount = values.filter((r) => r.state === "running").length;
-  const notRunCount = tests.length - values.length;
+  const pendingCount = Math.max(0, tests.length - okCount - failCount - runningCount);
 
-  // Group tests by prefix
+  // Group tests by their current IDs.
   const grouped = new Map<GroupKey, TestDefinition[]>();
   for (const t of tests) {
-    const g = guessGroup(t.id);
+    const g = groupForTest(t.id);
     if (!grouped.has(g)) grouped.set(g, []);
     grouped.get(g)!.push(t);
   }
@@ -95,7 +91,7 @@ export default function TestsPage() {
           <div>
             <h2 style={{ fontSize: "1.25rem" }}>Vérification complète</h2>
             <p style={{ color: "var(--muted)", fontSize: "0.88rem", marginTop: "0.25rem" }}>
-              Vérifie la configuration, Garmin MCP, le tunnel OpenAI et le connecteur ChatGPT.
+              Vérifie la configuration, Garmin Personal MCP, le tunnel OpenAI et le connecteur ChatGPT.
             </p>
           </div>
           <LoadingButton
@@ -116,7 +112,7 @@ export default function TestsPage() {
             <div className="test-stat-label">Échecs</div>
           </div>
           <div className="test-stat stat-pending">
-            <div className="test-stat-value">{notRunCount + skipCount}</div>
+            <div className="test-stat-value">{pendingCount}</div>
             <div className="test-stat-label">Non lancés</div>
           </div>
           <div className="test-stat stat-running">
@@ -130,7 +126,9 @@ export default function TestsPage() {
 
       {/* Grouped test cards */}
       <section className="test-list">
-        {Array.from(grouped.entries()).map(([groupKey, groupTests]) => (
+        {GROUP_ORDER.filter((key) => grouped.has(key)).map((groupKey) => {
+          const groupTests = grouped.get(groupKey)!;
+          return (
           <div key={groupKey}>
             <p className="test-section-label">{GROUP_LABELS[groupKey]}</p>
             {groupTests.map((def) => (
@@ -143,7 +141,8 @@ export default function TestsPage() {
               />
             ))}
           </div>
-        ))}
+          );
+        })}
       </section>
 
       <div className="action-bar-center" style={{ marginTop: "var(--space-2)" }}>

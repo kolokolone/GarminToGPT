@@ -1,6 +1,6 @@
 # GarminToGPT
 
-**Version 1.1.2**
+**Version 1.1.3**
 
 GarminToGPT est une application locale qui connecte ChatGPT à Garmin Connect avec :
 
@@ -89,15 +89,40 @@ Selon la version de ChatGPT, l’entrée peut s’appeler **Plugins** ou
 
 ### 4. Persistance des clés
 
-Les clés et le `tunnel_id` sont conservés dans des volumes Docker nommés :
+Les clés et le `tunnel_id` sont conservés dans des **bind mounts visibles sur
+l’hôte**, hors Git :
 
-- `garmintogpt_garmin` → `/home/app/.config/garmin` (clé Garmin + cache de jeton) ;
-- `garmintogpt_openai` → `/home/app/.config/garmintogpt` (tunnel ID + clé API ChatGPT) ;
-- `garmintogpt_runtime` → `/app/runtime` (état, PID, binaire téléchargé).
+- `./data/garmin` → `/home/app/.config/garmin` (clé Garmin + cache de jeton) ;
+- `./data/garmintogpt` → `/home/app/.config/garmintogpt` (tunnel ID + clé API ChatGPT) ;
+- `garmintogpt_runtime` et `garmintogpt_logs` restent des volumes nommés pour
+  l’état et les logs.
 
-Ils survivent à `docker compose restart`, `docker compose up -d` et
-`docker compose down` (sans `-v`). **`docker compose down -v` supprime les
-volumes et donc les clés** : à éviter sauf si tu veux tout réinitialiser.
+Ces bind mounts survivent aux mises à jour d’image, à la recréation du conteneur
+et à `docker compose down -v`. Sauvegarde `./data` pour conserver les clés.
+
+Au premier démarrage de la v1.1.3, l’entrypoint copie automatiquement les
+fichiers manquants depuis les anciens volumes nommés `garmintogpt_garmin` et
+`garmintogpt_openai` (compose v1.1.2), sans écraser un fichier déjà présent dans
+`./data`.
+
+### Migration depuis l’ancien compose `.garminconnect`
+
+L’ancien compose montait `/home/app/.garminconnect` et `/home/app/.cloudflared`,
+alors que la v1.1.x stocke les clés dans `/home/app/.config/garmin` et
+`/home/app/.config/garmintogpt`. Ces chemins n’étaient pas montés : les clés
+vivaient dans la couche du conteneur et disparaissaient à la recréation.
+
+Avant de recréer le conteneur, copie-les vers `./data` :
+
+```powershell
+New-Item -ItemType Directory -Force .\data\garmin, .\data\garmintogpt
+docker cp garmintogpt:/home/app/.config/garmin/. .\data\garmin\
+docker cp garmintogpt:/home/app/.config/garmintogpt/. .\data\garmintogpt\
+```
+
+Puis remplace le compose par celui du dépôt et lance
+`docker compose up -d --build`. Si le conteneur a déjà été recréé, ressaisis les
+clés une fois ; le nouveau compose les conservera.
 
 La dernière valeur enregistrée dans `/connexion` ou `/tunnel` est celle utilisée
 au redémarrage suivant. Les écritures sont atomiques et les fichiers sont en
@@ -215,7 +240,7 @@ et mots de passe.
 - Les requêtes et réponses MCP transitent par OpenAI ; si tes données ne doivent pas passer par OpenAI, n’utilise pas ce tunnel.
 - La clé API ChatGPT est stockée en 0600 ou fournie par variable d’environnement.
 - La suppression de la configuration du tunnel nécessite une confirmation explicite et arrête le tunnel.
-- `docker compose down -v` supprime les volumes et les clés ; utilise `docker compose down` pour conserver les données.
+- `docker compose down -v` ne supprime pas `./data` ; les clés survivent. Sauvegarde quand même `./data`.
 - Aucun `.env`, `garmin.env`, clé, jeton, log réel ou fichier runtime ne doit être versionné.
 
 Voir `docs/openai-tunnel.md`, `docs/security.md` et `docs/troubleshooting.md`.

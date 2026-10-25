@@ -11,7 +11,7 @@ from app.core.paths import project_root, resolve_project_path
 
 class AppConfig(BaseModel):
     name: str = "GarminToGPT"
-    version: str = "1.1.2"
+    version: str = "1.1.3"
     environment: str = "local"
 
 

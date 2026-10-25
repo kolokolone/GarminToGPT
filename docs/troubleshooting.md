@@ -103,11 +103,16 @@ modifie `tunnel.health_port` dans `config/app.yaml`.
 
 ## Docker et persistance des clés
 
-Les volumes `garmintogpt_garmin`, `garmintogpt_openai` et
-`garmintogpt_runtime` conservent les clés, le tunnel ID et l’état entre les
-redémarrages. `docker compose restart` et `docker compose up -d` ne les
-effacent pas. **`docker compose down -v` supprime les volumes et les clés** ;
-utilise `docker compose down` pour conserver les données.
+Les clés sont dans `./data/garmin` et `./data/garmintogpt` (bind mounts hôte,
+hors Git). Elles survivent aux mises à jour d’image, à la recréation du
+conteneur et à `docker compose down -v`. `garmintogpt_runtime`/`garmintogpt_logs`
+sont des volumes nommés non sensibles.
+
+Si tu viens d’un ancien compose qui montait `.garminconnect`, les clés v1.1.x
+étaient dans la couche du conteneur. Copie-les avant de recréer :
+`docker cp garmintogpt:/home/app/.config/garmin/. ./data/garmin/` et idem pour
+`/home/app/.config/garmintogpt`. Sinon, ressaisis-les une fois : le nouveau
+compose les conservera.
 
 Le healthcheck `/ui` du tunnel est interne au conteneur (loopback) ;
 l’application lit `/readyz` depuis le backend.

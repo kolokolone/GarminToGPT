@@ -26,10 +26,10 @@ docker compose up -d --build
 ```
 
 Ouvre `http://127.0.0.1:8000/tunnel` et enregistre le `tunnel_id` et la clé API
-ChatGPT. Les volumes `garmintogpt_openai`, `garmintogpt_garmin` et
-`garmintogpt_runtime` conservent les clés et l’état entre les redémarrages.
-`docker compose down` conserve les volumes ; `docker compose down -v` les
-supprime (et efface donc les clés).
+ChatGPT. Les clés sont dans les bind mounts `./data/garmin` et
+`./data/garmintogpt` (hors Git) : elles survivent aux mises à jour d’image et à
+`docker compose down -v`. L’entrypoint migre les anciens volumes nommés
+`garmintogpt_garmin`/`garmintogpt_openai` au premier démarrage.
 
 ## Configuration dans l’application
 

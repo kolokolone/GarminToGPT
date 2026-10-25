@@ -48,15 +48,16 @@ Références :
 
 ## Persistance Docker
 
-Les volumes nommés conservent les secrets hors image :
+Les clés sont dans des bind mounts visibles sur l’hôte, hors Git :
 
-- `garmintogpt_garmin` : clé Garmin + cache de jeton ;
-- `garmintogpt_openai` : tunnel ID + clé API ChatGPT ;
-- `garmintogpt_runtime` : état, PID, binaire tunnel téléchargé.
+- `./data/garmin` : clé Garmin + cache de jeton ;
+- `./data/garmintogpt` : tunnel ID + clé API ChatGPT.
 
-`docker compose restart` et `docker compose up -d` conservent les volumes.
-`docker compose down` les conserve aussi ; **`docker compose down -v` les
-supprime et efface les clés**.
+`garmintogpt_runtime` et `garmintogpt_logs` restent des volumes nommés pour
+l’état et les logs. Les bind mounts survivent aux mises à jour d’image, à la
+recréation du conteneur et à `docker compose down -v`. Sauvegarde `./data`.
+L’entrypoint migre les anciens volumes `garmintogpt_garmin`/`garmintogpt_openai`
+(v1.1.2) vers `./data` au premier démarrage, sans écraser l’existant.
 
 ## Fichiers ignorés
 

@@ -11,7 +11,7 @@ FROM python:3.12-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+    && apt-get install -y --no-install-recommends ca-certificates curl unzip gosu \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir uv
 RUN curl -fsSL -o /tmp/tunnel-client.zip \
@@ -31,11 +31,14 @@ RUN useradd --create-home --shell /usr/sbin/nologin app \
     && mkdir -p /app/logs /app/runtime/pids /home/app/.config/garmin /home/app/.config/garmintogpt \
     && chown -R app:app /app /home/app/.config
 
-USER app
+COPY docker/entrypoint.sh /usr/local/bin/garmintogpt-entrypoint
+RUN chmod +x /usr/local/bin/garmintogpt-entrypoint
+
 ENV GARMINTOGPT_ENV=local
 ENV GARMINTOGPT_CONFIG=/app/config/app.yaml
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=5)"
+    CMD ["gosu", "app", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=5)"]
 
+ENTRYPOINT ["/usr/local/bin/garmintogpt-entrypoint"]
 CMD ["uvicorn", "app.main:app", "--app-dir", "backend", "--host", "0.0.0.0", "--port", "8000"]

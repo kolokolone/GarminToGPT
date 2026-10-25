@@ -13,7 +13,9 @@ export function TestCard({ definition, result, running, onRun }: { definition: T
         <p>{definition.description}</p>
         {result ? (
           <p className="result-text">
-            {result.message} {result.suggestion ? <strong>Suggestion: {result.suggestion}</strong> : null}
+            {result.message}
+            {result.duration_ms > 0 ? ` · ${result.duration_ms} ms` : ""}
+            {result.suggestion ? <strong> Suggestion : {result.suggestion}</strong> : null}
           </p>
         ) : null}
       </div>

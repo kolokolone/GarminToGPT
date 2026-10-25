@@ -1,4 +1,4 @@
-# Architecture GarminToGPT 1.1.2
+# Architecture GarminToGPT 1.1.3
 
 GarminToGPT sépare strictement l’UI, l’API et les effets de bord système.
 

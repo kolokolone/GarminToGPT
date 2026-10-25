@@ -21,11 +21,14 @@ services:
     volumes:
       - garmintogpt_logs:/app/logs
       - garmintogpt_runtime:/app/runtime
-      - garmintogpt_garmin:/home/app/.config/garmin
-      - garmintogpt_openai:/home/app/.config/garmintogpt
+      - ./data/garmin:/home/app/.config/garmin
+      - ./data/garmintogpt:/home/app/.config/garmintogpt
+      # Legacy named volumes: migrated automatically by the entrypoint.
+      - garmintogpt_garmin:/legacy/garmin:ro
+      - garmintogpt_openai:/legacy/garmintogpt:ro
 
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=5)"]
+      test: ["CMD", "gosu", "app", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=5)"]
       interval: 30s
       timeout: 5s
       start_period: 20s

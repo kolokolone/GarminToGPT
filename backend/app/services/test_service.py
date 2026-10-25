@@ -76,9 +76,9 @@ class TestService:
                 ),
                 self._check_dependencies,
             ),
-            "check_garmin_token_exists": (
+            "check_garmin_api_key": (
                 TestDefinition(
-                    id="check_garmin_token_exists",
+                    id="check_garmin_api_key",
                     name="Clé API Garmin détectée",
                     description=(
                         "Cherche une clé Personal API dans l'environnement "
@@ -143,25 +143,25 @@ class TestService:
                 ),
                 self._check_tunnel_process,
             ),
-            "check_tunnel_public_url": (
+            "check_tunnel_ready": (
                 TestDefinition(
-                    id="check_tunnel_public_url",
+                    id="check_tunnel_ready",
                     name="Tunnel OpenAI prêt",
                     description="Vérifie /readyz du tunnel-client.",
                 ),
                 self._check_tunnel_ready,
             ),
-            "check_remote_mcp_endpoint": (
+            "check_tunnel_configured": (
                 TestDefinition(
-                    id="check_remote_mcp_endpoint",
+                    id="check_tunnel_configured",
                     name="Tunnel OpenAI configuré",
-                    description="Vérifie le tunnel ID et la runtime key.",
+                    description="Vérifie le tunnel ID et la clé API ChatGPT.",
                 ),
                 self._check_tunnel_connector,
             ),
-            "check_chatgpt_url_format": (
+            "check_chatgpt_connector": (
                 TestDefinition(
-                    id="check_chatgpt_url_format",
+                    id="check_chatgpt_connector",
                     name="Connecteur ChatGPT",
                     description="Vérifie que ChatGPT peut utiliser le tunnel.",
                 ),
@@ -236,8 +236,17 @@ class TestService:
         return health.ok, health.message, "Vérifie le proxy MCP local." if not health.ok else None
 
     def _check_mcp_tools(self) -> tuple[bool, str, str | None]:
-        tools = self.mcp.classify_mcp_tools()
-        return True, f"{len(tools.read_tools)} lecture, {len(tools.write_tools)} écriture.", None
+        result = self.mcp.list_mcp_tools()
+        if not result.ok:
+            return (
+                False,
+                result.message,
+                "Vérifie que le proxy MCP local est démarré.",
+            )
+        tools = result.tools
+        reads = sum(1 for tool in tools if tool.risk == "read")
+        writes = sum(1 for tool in tools if tool.risk == "write")
+        return True, f"{reads} lecture, {writes} écriture.", None
 
     def _check_tunnel_process(self) -> tuple[bool, str, str | None]:
         status = self.tunnel.get_tunnel_status()
@@ -257,7 +266,7 @@ class TestService:
             return (
                 False,
                 "Tunnel OpenAI non configuré.",
-                "Ouvre /tunnel pour renseigner le tunnel ID et la runtime API key.",
+                "Ouvre /tunnel pour renseigner le tunnel ID et la clé API ChatGPT.",
             )
         return True, f"Tunnel configuré: {config.tunnel_id}.", None
 
@@ -279,9 +288,17 @@ class TestService:
         config_ok, _, _ = self._check_config()
         dependency_ok, _, _ = self._check_dependencies()
         token_ok, _, _ = self._check_api_key()
+        tunnel_client_ok, _, _ = self._check_tunnel_client()
         mcp_ok, _, _ = self._check_mcp_port()
         tunnel_ok, _, _ = self._check_chatgpt_connector()
-        ok = config_ok and dependency_ok and token_ok and mcp_ok and tunnel_ok
+        ok = (
+            config_ok
+            and dependency_ok
+            and token_ok
+            and tunnel_client_ok
+            and mcp_ok
+            and tunnel_ok
+        )
         return (
             ok,
             "Smoke test complet terminé." if ok else "Smoke test incomplet.",
