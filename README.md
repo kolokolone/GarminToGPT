@@ -105,7 +105,7 @@ Le tunnel ID et la clé sont stockés hors dépôt dans
 `CONTROL_PLANE_TUNNEL_ID` et `CONTROL_PLANE_API_KEY` (ou `OPENAI_API_KEY`)
 sont prioritaires sur les fichiers. La clé n’est jamais renvoyée par l’API.
 
-Le client expose un healthcheck local sur `http://127.0.0.1:8091/readyz` et un tableau de bord sur `http://127.0.0.1:8091/ui`. `mcp-proxy` reste sur `127.0.0.1:8080/mcp` ; le tunnel s’y connecte en local.
+Le client expose un healthcheck local sur `http://127.0.0.1:8091/readyz` et un tableau de bord sur `http://127.0.0.1:8091/ui`. `mcp-proxy` reste sur `127.0.0.1:8080/mcp` ; le tunnel l’attend jusqu’à 90 s (`--mcp.startup-wait-timeout`) avant le premier poll OpenAI.
 
 Aucune URL `trycloudflare.com` n’est créée ni à copier.
 

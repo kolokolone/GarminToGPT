@@ -192,6 +192,8 @@ class TunnelService:
             "env:CONTROL_PLANE_API_KEY",
             "--mcp.server-url",
             f"url={self.mcp_server_url},channel=main",
+            "--mcp.startup-wait-timeout",
+            f"{self.settings.tunnel.mcp_startup_timeout_seconds}s",
             "--health.listen-addr",
             f"{self.settings.tunnel.health_host}:{self.settings.tunnel.health_port}",
             "--log.format",

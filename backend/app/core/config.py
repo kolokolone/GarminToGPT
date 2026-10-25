@@ -88,6 +88,7 @@ class OpenAITunnelConfig(BaseModel):
     tunnels_page_url: str = "https://platform.openai.com/settings/organization/tunnels"
     api_keys_page_url: str = "https://platform.openai.com/settings/organization/api-keys"
     ready_timeout_seconds: int = 30
+    mcp_startup_timeout_seconds: int = 90
     binary_version: str = "0.0.18"
 
     @field_validator("health_host")
@@ -109,6 +110,15 @@ class OpenAITunnelConfig(BaseModel):
     def validate_ready_timeout(cls, value: int) -> int:
         if not 5 <= value <= 120:
             raise ValueError("tunnel.ready_timeout_seconds must be between 5 and 120")
+        return value
+
+    @field_validator("mcp_startup_timeout_seconds")
+    @classmethod
+    def validate_mcp_startup_timeout(cls, value: int) -> int:
+        if not 10 <= value <= 300:
+            raise ValueError(
+                "tunnel.mcp_startup_timeout_seconds must be between 10 and 300"
+            )
         return value
 
     @field_validator("binary_version")

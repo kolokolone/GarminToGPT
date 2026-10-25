@@ -99,6 +99,7 @@ def _settings_dict() -> dict[str, object]:
             "tunnels_page_url": "https://platform.openai.com/settings/organization/tunnels",
             "api_keys_page_url": "https://platform.openai.com/settings/organization/api-keys",
             "ready_timeout_seconds": 30,
+            "mcp_startup_timeout_seconds": 90,
             "binary_version": "0.0.18",
         },
         "runtime": {

@@ -44,6 +44,7 @@ tunnel-client run
   --control-plane.tunnel-id <tunnel_id>
   --control-plane.api-key env:CONTROL_PLANE_API_KEY
   --mcp.server-url url=http://127.0.0.1:8080/mcp,channel=main
+  --mcp.startup-wait-timeout 90s
   --health.listen-addr 127.0.0.1:8091
 ```
 
@@ -55,7 +56,8 @@ commande. Le healthcheck est lu sur :
 - `http://127.0.0.1:8091/metrics` — métriques Prometheus.
 
 `mcp-proxy` continue d’écouter sur `127.0.0.1:8080/mcp` ; le tunnel s’y connecte
-en local.
+en local. `--mcp.startup-wait-timeout 90s` laisse au proxy le temps de démarrer
+(et de s’installer au premier lancement) avant le premier poll OpenAI.
 
 ## Côté ChatGPT
 

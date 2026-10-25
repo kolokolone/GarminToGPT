@@ -193,6 +193,7 @@ def test_start_builds_openai_command_and_passes_key_by_env(tmp_path: Path) -> No
         "env:CONTROL_PLANE_API_KEY"
     )
     assert "url=http://127.0.0.1:8080/mcp,channel=main" in command
+    assert command[command.index("--mcp.startup-wait-timeout") + 1] == "90s"
     assert command[command.index("--health.listen-addr") + 1] == "127.0.0.1:8091"
     assert env == {
         "CONTROL_PLANE_API_KEY": API_KEY,
