@@ -13,11 +13,12 @@ export function AppHeader({ version }: { version?: string }) {
       <div className="app-header-left">
         <p className="app-header-eyebrow">PONT MCP LOCAL</p>
         <h1 className="app-header-title">GarminToGPT</h1>
-        <p className="app-header-subtitle">Pont local entre Garmin Connect, la Personal API et ChatGPT.</p>
+        <p className="app-header-subtitle">Pont local entre Garmin Connect, la Personal API, le tunnel OpenAI et ChatGPT.</p>
       </div>
       <nav className="app-header-nav" aria-label="Navigation principale">
         <Link href="/" className={isActive("/") ? "active" : ""}>Accueil</Link>
         <Link href="/connexion" className={isActive("/connexion") ? "active" : ""}>Garmin</Link>
+        <Link href="/tunnel" className={isActive("/tunnel") ? "active" : ""}>Tunnel</Link>
         <Link href="/tests" className={isActive("/tests") ? "active" : ""}>Tests</Link>
         {version ? <span className="version-badge">v{version}</span> : null}
       </nav>

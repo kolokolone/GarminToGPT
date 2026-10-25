@@ -2,30 +2,50 @@
 
 Priorité : sécurité, robustesse, diagnostic, simplicité.
 
-## Secrets
+## Secrets Garmin
 
 GarminToGPT ne stocke aucun mot de passe Garmin. La connexion utilise la clé
 Personal API officielle, échangée contre un jeton de 24 h par
 `garmin-connect-personal-api-python`.
 
-- La clé est stockée dans `~/.config/garmin/connect-personal-api-key` avec des
-  permissions restreintes, ou fournie par `GARMIN_PERSONAL_API_KEY`.
-- Le cache de jeton officiel est dans
-  `~/.config/garmin/connect-personal-api-bearer-token.json`.
-- La clé et le jeton ne sont jamais renvoyés par l'API de statut, jamais
-  journalisés, et les logs passent par une redaction qui couvre `GCDC_...`,
-  les JWT et les en-têtes `ApiKey`/`Bearer`.
-- `garmin.env` est ignoré par Git. Ne versionne jamais une clé réelle.
+- Clé : `~/.config/garmin/connect-personal-api-key` (0600 best effort) ou
+  `GARMIN_PERSONAL_API_KEY`.
+- Cache de jeton : `~/.config/garmin/connect-personal-api-bearer-token.json`.
+- La clé et le jeton ne sont jamais renvoyés par l’API de statut et les logs
+  passent par une redaction `GCDC_…`, JWT, `ApiKey` et `Bearer`.
 
-Les fichiers suivants sont ignorés : `.env`, `garmin.env`, logs, runtime, data,
-tokens, secrets et mots de passe.
+## Secrets OpenAI
 
-## Tunnel Cloudflare
+Le tunnel utilise une **runtime API key** OpenAI avec Tunnels Read + Use.
 
-Un quick tunnel Cloudflare donne une URL publique. Même si l’URL est longue, elle ne doit pas être considérée comme un contrôle d’accès. Ferme le tunnel dès que ChatGPT n’en a plus besoin.
+- Clé : `~/.config/garmintogpt/openai-tunnel-key` (0600 best effort) ou
+  `CONTROL_PLANE_API_KEY` / `OPENAI_API_KEY`.
+- Tunnel ID : `~/.config/garmintogpt/openai-tunnel.json` (non secret) ou
+  `CONTROL_PLANE_TUNNEL_ID`.
+- La clé est passée au processus `tunnel-client` par son environnement, jamais
+  dans la ligne de commande.
+- La clé n’est jamais renvoyée par l’API ; seule une empreinte masquée est
+  affichée.
+- Une admin key (`OPENAI_ADMIN_KEY`) ne doit pas être utilisée pour le daemon.
 
-Pour un usage durable, configure un tunnel nommé et étudie Cloudflare Access si ChatGPT le supporte dans ton flux.
+## Tunnel OpenAI
+
+- Connexion **sortante uniquement** vers `api.openai.com:443` ; aucun port
+  entrant ni URL publique.
+- Le client expose `/healthz`, `/readyz`, `/metrics` et `/ui` sur
+  `127.0.0.1:8091`.
+- Les requêtes et réponses MCP transitent par OpenAI. Le tunnel ne répond pas
+  aux exigences « strictement local » : dans ce cas, ne l’active pas.
+- Le client doit rester démarré pour les appels MCP de ChatGPT.
+- Ferme le tunnel quand tu n’en as plus besoin.
+
+## Fichiers ignorés
+
+`.env`, `garmin.env`, logs, runtime, data, clés, jetons, secrets et mots de
+passe ne doivent jamais être versionnés. `runtime/bin` (binaire téléchargé) est
+sous `runtime/`.
 
 ## MCP et outils d’écriture
 
-Le backend classe conservativement les outils connus : `get_*` en lecture, `add_*`, `set_*`, `delete_*`, `remove_*`, `upload_*`, `schedule_*` et `unschedule_*` en écriture. Un filtrage read-only strict doit être ajouté dès que le proxy MCP choisi expose un mécanisme stable de filtrage.
+La Personal API est en lecture seule. Les outils d’écriture de l’ancien serveur
+SSO ne sont plus exposés ; le proxy MCP ne doit exposer que les lectures.

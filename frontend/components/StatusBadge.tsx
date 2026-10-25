@@ -12,7 +12,6 @@ const LABELS: Partial<Record<BadgeState, string>> = {
   running: "actif",
   starting: "démarrage",
   stopped: "arrêté",
-  paused: "pause",
   unhealthy: "instable",
   error: "erreur",
   success: "succès",

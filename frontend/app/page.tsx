@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppHeader } from "../components/AppHeader";
-import { ConfirmDialog } from "../components/ConfirmDialog";
 import { LogsModal } from "../components/LogsModal";
 import { ServiceStatusCard } from "../components/ServiceStatusCard";
 import { api } from "../lib/api";
@@ -12,7 +11,6 @@ import {
   computeBridgeInfo,
   computeStepperSteps,
   isGarminReady,
-  isValidUrl,
 } from "../lib/status";
 import type {
   GlobalStatus,
@@ -23,9 +21,17 @@ import type {
 
 const INITIAL_TUNNEL: TunnelStatus = {
   state: "starting",
-  mode: "quick",
-  public_url: null,
-  chatgpt_mcp_url: null,
+  provider: "openai",
+  configured: false,
+  tunnel_id: null,
+  api_key_configured: false,
+  binary_installed: false,
+  binary_version: null,
+  ready: false,
+  health_status: null,
+  health_url: null,
+  ui_url: null,
+  connector_url: "https://chatgpt.com/#settings/Connectors",
   pid: null,
   last_event: null,
   process: { status: "starting", pid: null, message: "" },
@@ -40,7 +46,6 @@ export default function HomePage() {
   const [copied, setCopied] = useState(false);
   const [logsService, setLogsService] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogResult | null>(null);
-  const [confirm, setConfirm] = useState<null | "stopTunnel" | "regenerate">(null);
   const [mcpLocal, setMcpLocal] = useState<McpLocalStatus | null>(null);
   const [mcpLoading, setMcpLoading] = useState(false);
 
@@ -102,13 +107,15 @@ export default function HomePage() {
   const runAction = useCallback(async (action: () => Promise<unknown>) => {
     setLoadingAction(true);
     try {
-      await action();
+      const result = (await action()) as { ok?: boolean; message?: string } | undefined;
       await refresh();
+      if (result && result.ok === false) {
+        setError(result.message ?? "Action tunnel impossible");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Action impossible");
     } finally {
       setLoadingAction(false);
-      setConfirm(null);
     }
   }, [refresh]);
 
@@ -154,6 +161,16 @@ export default function HomePage() {
           "La vérification de la clé API Garmin a échoué. Vérifie ta connexion réseau " +
           "puis réessaie depuis /connexion."
         );
+      } else if (!result.tunnel.configured) {
+        setNotice(
+          "Tunnel OpenAI non configuré. Ouvre /tunnel pour renseigner le tunnel ID " +
+          "et la runtime API key."
+        );
+      } else if (result.tunnel.state === "error") {
+        setNotice(
+          result.tunnel.last_event ??
+          "Le tunnel OpenAI a échoué. Vérifie sa configuration dans /tunnel."
+        );
       } else {
         setNotice(null);
       }
@@ -197,9 +214,10 @@ export default function HomePage() {
   }, []);
 
   const handleCopy = useCallback(() => {
-    if (status?.tunnel.chatgpt_mcp_url) {
-      void navigator.clipboard?.writeText(status.tunnel.chatgpt_mcp_url);
+    if (status?.tunnel.tunnel_id) {
+      void navigator.clipboard?.writeText(status.tunnel.tunnel_id);
       setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   }, [status]);
 
@@ -215,33 +233,21 @@ export default function HomePage() {
     ? computeAccessInfo(mcpLocal, status.tunnel, status.state)
     : null;
 
-  const urlValid = status ? isValidUrl(status.tunnel.chatgpt_mcp_url) : false;
   const tunnel = status?.tunnel ?? INITIAL_TUNNEL;
-
-  /* ── Helpers for URL display state ── */
-
-  const urlDisplayText = (() => {
-    if (urlValid) return tunnel.chatgpt_mcp_url!;
-    if (tunnel.state === "starting") return "Lien en cours de création…";
-    if (tunnel.state === "paused") return "Tunnel mis en pause";
-    if (tunnel.state === "running" && !tunnel.chatgpt_mcp_url) return "Lien en attente…";
-    return "Tunnel Cloudflare non actif";
-  })();
-
-  const urlBadgeLabel = (() => {
-    if (urlValid) return "ACTIVE";
-    if (tunnel.state === "starting") return "CRÉATION";
-    if (tunnel.state === "running") return "ATTENTE";
-    if (tunnel.state === "error") return "ERREUR";
-    return "INDISPONIBLE";
-  })();
-
-  const urlBadgeClass = (() => {
-    if (urlValid) return "badge-bridge-ready";
-    if (tunnel.state === "starting") return "badge-bridge-starting";
-    if (tunnel.state === "error") return "badge-bridge-error";
-    return "badge-off";
-  })();
+  const tunnelBadgeLabel = tunnel.ready
+    ? "ACTIF"
+    : tunnel.state === "starting"
+      ? "DÉMARRAGE"
+      : tunnel.state === "error"
+        ? "ERREUR"
+        : "ARRÊTÉ";
+  const tunnelBadgeClass = tunnel.ready
+    ? "badge-bridge-ready"
+    : tunnel.state === "starting"
+      ? "badge-bridge-starting"
+      : tunnel.state === "error"
+        ? "badge-bridge-error"
+        : "badge-off";
 
   /* ── Loading state ── */
 
@@ -384,26 +390,70 @@ export default function HomePage() {
         </section>
       ) : null}
 
-      {/* ── 4. URL Card ── */}
+      {/* ── 4. OpenAI tunnel card ── */}
       <section className="card">
-        <p className="section-label">URL À COLLER DANS CHATGPT</p>
-        <div className="row wrap" style={{ gap: "var(--space-2)" }}>
-          <div className="url-field" style={{ flex: 1, minWidth: 0 }}>
-            {urlValid ? (
-              <code>{tunnel.chatgpt_mcp_url}</code>
-            ) : (
-              <span className="url-field-placeholder">{urlDisplayText}</span>
-            )}
+        <p className="section-label">TUNNEL OPENAI</p>
+        <div className="row between" style={{ gap: "var(--space-2)", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h2 style={{ fontSize: "1.05rem", wordBreak: "break-all" }}>
+              {tunnel.tunnel_id ?? "Tunnel non configuré"}
+            </h2>
+            <p style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+              {tunnel.ready
+                ? "Connecté au control plane OpenAI. ChatGPT peut utiliser Connection: Tunnel."
+                : tunnel.configured
+                  ? tunnel.last_event ?? "Tunnel OpenAI arrêté."
+                  : "Aucun tunnel local configuré."}
+            </p>
           </div>
-          <div className="row" style={{ gap: "var(--space-1)", flexShrink: 0 }}>
-            <button onClick={handleCopy} disabled={!urlValid}>
-              {copied ? "Copié" : "Copier"}
-            </button>
-            <button className="secondary" onClick={() => setConfirm("regenerate")} disabled={loadingAction}>
-              Régénérer le lien
-            </button>
-          </div>
-          <span className={`badge badge-pill ${urlBadgeClass}`}>{urlBadgeLabel}</span>
+          <span className={`badge badge-pill ${tunnelBadgeClass}`}>{tunnelBadgeLabel}</span>
+        </div>
+
+        {!tunnel.configured ? (
+          <p className="warning-box">
+            Tunnel OpenAI non configuré. <a href="/tunnel">Ouvre /tunnel</a> pour renseigner
+            le tunnel ID et la runtime API key.
+          </p>
+        ) : null}
+
+        <div className="row wrap" style={{ gap: "var(--space-2)", marginTop: "var(--space-2)" }}>
+          <button onClick={handleCopy} disabled={!tunnel.tunnel_id}>
+            {copied ? "Copié" : "Copier l'ID"}
+          </button>
+          <a className="button-link" href={tunnel.connector_url} target="_blank" rel="noreferrer">
+            Connecteurs ChatGPT
+          </a>
+          {tunnel.ui_url && (tunnel.state === "running" || tunnel.state === "starting") ? (
+            <a className="button-link" href={tunnel.ui_url} target="_blank" rel="noreferrer">
+              Tableau de bord tunnel
+            </a>
+          ) : null}
+          {!tunnel.configured ? (
+            <a className="button-link" href="/tunnel">Configurer le tunnel</a>
+          ) : (
+            <>
+              {tunnel.state === "running" ? (
+                <button className="secondary" onClick={() => void runAction(api.stopTunnel)} disabled={loadingAction}>
+                  Arrêter le tunnel
+                </button>
+              ) : (
+                <button className="secondary" onClick={() => void runAction(api.startTunnel)} disabled={loadingAction}>
+                  Démarrer le tunnel
+                </button>
+              )}
+              <button className="ghost" onClick={() => void runAction(api.restartTunnel)} disabled={loadingAction}>
+                Redémarrer
+              </button>
+            </>
+          )}
+        </div>
+
+        <div className="info-callout" style={{ marginTop: "var(--space-2)" }}>
+          <span className="info-callout-icon">ℹ</span>
+          <span>
+            Dans ChatGPT → Settings → Connectors → <code>Connection: Tunnel</code>,
+            sélectionne le tunnel ou colle son ID. Aucune URL publique à copier.
+          </span>
         </div>
       </section>
 
@@ -423,10 +473,10 @@ export default function HomePage() {
           onLogs={() => void openLogs("auth")}
         />
         <ServiceStatusCard
-          title="Cloudflare Tunnel"
+          title="Tunnel OpenAI"
           kind="tunnel"
           data={status.tunnel}
-          onLogs={() => void openLogs("cloudflare")}
+          onLogs={() => void openLogs("tunnel")}
         />
       </section>
 
@@ -450,17 +500,6 @@ export default function HomePage() {
         error={logsService ? error : null}
         onClose={() => { setLogsService(null); setError(null); }}
         onRefresh={() => logsService && void openLogs(logsService)}
-      />
-      <ConfirmDialog
-        open={confirm !== null}
-        title="Confirmation requise"
-        message="Cette action modifie l'état du tunnel Cloudflare public."
-        confirmLabel="Confirmer"
-        onCancel={() => setConfirm(null)}
-        onConfirm={() => {
-          if (confirm === "stopTunnel") void runAction(api.stopTunnel);
-          if (confirm === "regenerate") void runAction(api.regenerateTunnel);
-        }}
       />
     </main>
   );

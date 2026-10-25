@@ -16,9 +16,9 @@ def mcp_logs(lines: int = Query(default=200, ge=1, le=1000)) -> LogResult:
     return get_container().logs.read_logs("mcp", lines)
 
 
-@router.get("/cloudflare", response_model=LogResult)
-def cloudflare_logs(lines: int = Query(default=200, ge=1, le=1000)) -> LogResult:
-    return get_container().logs.read_logs("cloudflare", lines)
+@router.get("/tunnel", response_model=LogResult)
+def tunnel_logs(lines: int = Query(default=200, ge=1, le=1000)) -> LogResult:
+    return get_container().logs.read_logs("tunnel", lines)
 
 
 @router.get("/auth", response_model=LogResult)

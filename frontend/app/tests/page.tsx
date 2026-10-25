@@ -13,7 +13,7 @@ const GROUP_LABELS: Record<GroupKey, string> = {
   config: "PRÉ-REQUIS",
   garmin: "GARMIN",
   mcp: "MCP LOCAL",
-  tunnel: "CLOUDFLARE",
+  tunnel: "TUNNEL OPENAI",
   chatgpt: "CHATGPT",
 };
 
@@ -95,7 +95,7 @@ export default function TestsPage() {
           <div>
             <h2 style={{ fontSize: "1.25rem" }}>Vérification complète</h2>
             <p style={{ color: "var(--muted)", fontSize: "0.88rem", marginTop: "0.25rem" }}>
-              Vérifie la configuration, Garmin MCP, le tunnel Cloudflare et l&rsquo;endpoint ChatGPT.
+              Vérifie la configuration, Garmin MCP, le tunnel OpenAI et le connecteur ChatGPT.
             </p>
           </div>
           <LoadingButton

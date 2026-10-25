@@ -18,6 +18,7 @@ _FULL_PATTERNS = [
     re.compile(r"(https?://[^\s?]+\?[^\s]*(?:token|secret|auth|key)=[^\s]+)", re.IGNORECASE),
     re.compile(r"\bGCDC_[A-Za-z0-9._-]{8,}\b"),
     re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
+    re.compile(r"\bsk-[A-Za-z0-9_.*\-]{8,}\b"),
 ]
 
 

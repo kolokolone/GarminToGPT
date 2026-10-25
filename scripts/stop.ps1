@@ -17,15 +17,15 @@ function Stop-RecordedProcess($PidFile) {
     Remove-Item -LiteralPath $PidFile -Force
 }
 
-# 1) Tunnel Cloudflare en premier – arrêter l'exposition publique
+# 1) Tunnel OpenAI en premier – arrêter la connexion sortante
 try {
     Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/tunnel/stop" -TimeoutSec 2 | Out-Null
-    "Tunnel Cloudflare arrêté via API."
+    "Tunnel OpenAI arrêté via API."
 } catch {
     "API backend indisponible ou déjà arrêtée."
 }
 
-# 2) Service MCP (proxy + garmin-mcp)
+# 2) Service MCP (proxy + garmin-personal-mcp)
 try {
     Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/mcp/stop" -TimeoutSec 2 | Out-Null
     "Service MCP arrêté via API."

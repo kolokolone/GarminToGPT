@@ -74,7 +74,7 @@ echo UI + API : http://127.0.0.1:8000
 echo Connexion : http://127.0.0.1:8000/connexion
 echo Tests : http://127.0.0.1:8000/tests
 echo.
-echo Le backend controle ensuite MCP et Cloudflare depuis l'UI.
+echo Le backend controle ensuite MCP et le tunnel OpenAI depuis l'UI.
 echo Appuie sur Ctrl+C pour arreter GarminToGPT.
 echo.
 

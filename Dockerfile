@@ -11,11 +11,15 @@ FROM python:3.12-slim AS runtime
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates curl git \
+    && apt-get install -y --no-install-recommends ca-certificates curl unzip \
     && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir uv \
-    && curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o /usr/local/bin/cloudflared \
-    && chmod +x /usr/local/bin/cloudflared
+RUN pip install --no-cache-dir uv
+RUN curl -fsSL -o /tmp/tunnel-client.zip \
+      "https://github.com/openai/tunnel-client/releases/download/v0.0.18/tunnel-client-v0.0.18-linux-amd64.zip" \
+    && echo "3c82307316acd93c88a384b62af1d81d3f4cb0efa975f9c0bfaef922866a04c4  /tmp/tunnel-client.zip" | sha256sum -c - \
+    && unzip -j /tmp/tunnel-client.zip tunnel-client -d /usr/local/bin \
+    && chmod +x /usr/local/bin/tunnel-client \
+    && rm /tmp/tunnel-client.zip
 
 COPY pyproject.toml ./
 RUN uv pip install --system .
@@ -24,7 +28,7 @@ COPY config ./config
 COPY --from=frontend-build /src/frontend/out ./frontend/out
 
 RUN useradd --create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /app/logs /app/runtime/pids /home/app/.config/garmin \
+    && mkdir -p /app/logs /app/runtime/pids /home/app/.config/garmin /home/app/.config/garmintogpt \
     && chown -R app:app /app /home/app/.config
 
 USER app

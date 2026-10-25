@@ -18,7 +18,7 @@ def start_access() -> GlobalStatus:
     """Activate ChatGPT access after verifying the Garmin API key.
 
     The key is checked with a fresh token exchange and a small Garmin read.
-    If it is missing, expired, or unreachable, neither MCP nor Cloudflare is
+    If it is missing, expired, or unreachable, neither MCP nor the OpenAI tunnel is
     started. The operation is idempotent.
     """
     container = get_container()
@@ -47,7 +47,7 @@ def start_access() -> GlobalStatus:
 
 @router.post("/stop", response_model=GlobalStatus)
 def stop_access() -> GlobalStatus:
-    """Stop the local MCP bridge; the tunnel and its URL are kept."""
+    """Stop the local MCP bridge and the OpenAI tunnel."""
     container = get_container()
     logger.info("Stopping ChatGPT access")
 
@@ -55,8 +55,10 @@ def stop_access() -> GlobalStatus:
     if mcp_local.status == "stopped":
         logger.info("MCP local already stopped; nothing to do")
     else:
-        logger.info("Stopping MCP local only; tunnel left untouched")
+        logger.info("Stopping MCP local and OpenAI tunnel")
         container.mcp.stop_mcp_service()
+
+    container.tunnel.stop_tunnel()
 
     logger.info("ChatGPT access stop complete")
     return build_global_status(container)

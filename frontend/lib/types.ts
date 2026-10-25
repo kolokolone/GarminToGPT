@@ -10,7 +10,7 @@ export type KeySource = "file" | "env";
 export type RotationSource = "declared" | "observed" | "unknown";
 export type McpState = "stopped" | "starting" | "running" | "unhealthy" | "error";
 export type McpLocalState = "running" | "stopped" | "starting" | "stopping" | "error";
-export type TunnelState = "stopped" | "starting" | "running" | "paused" | "expired" | "error";
+export type TunnelState = "stopped" | "starting" | "running" | "error";
 export type BadgeState = GlobalState | GarminAuthState | McpState | TunnelState | "success" | "failed" | "not_run" | "skipped" | McpLocalState;
 
 export interface ProcessStatus {
@@ -83,12 +83,49 @@ export interface McpLocalStatus {
 
 export interface TunnelStatus {
   state: TunnelState;
-  mode: "quick" | "named";
-  public_url: string | null;
-  chatgpt_mcp_url: string | null;
+  provider: "openai";
+  configured: boolean;
+  tunnel_id: string | null;
+  api_key_configured: boolean;
+  binary_installed: boolean;
+  binary_version: string | null;
+  ready: boolean;
+  health_status: number | null;
+  health_url: string | null;
+  ui_url: string | null;
+  connector_url: string;
   pid: number | null;
   last_event: string | null;
   process: ProcessStatus;
+}
+
+export interface TunnelConfigStatus {
+  configured: boolean;
+  tunnel_id: string | null;
+  key_hint: string | null;
+  source: "env" | "file" | "mixed" | "none";
+  key_source: "env" | "file" | null;
+  tunnel_id_source: "env" | "file" | null;
+  editable: boolean;
+  binary_installed: boolean;
+  binary_version: string | null;
+  message: string;
+}
+
+export interface TunnelConfigResult {
+  ok: boolean;
+  changed: boolean;
+  message: string;
+  config: TunnelConfigStatus;
+  status: TunnelStatus;
+}
+
+export interface TunnelBinaryResult {
+  ok: boolean;
+  installed: boolean;
+  version: string | null;
+  path: string | null;
+  message: string;
 }
 
 export interface GlobalStatus {
@@ -107,8 +144,7 @@ export interface ActionResult {
   status: string;
   message: string;
   pid: number | null;
-  public_url?: string | null;
-  chatgpt_mcp_url?: string | null;
+  state?: TunnelState | null;
 }
 
 export interface LogResult {

@@ -23,7 +23,10 @@ def start() -> McpLocalStatus:
 
 @router.post("/stop", response_model=McpLocalStatus)
 def stop() -> McpLocalStatus:
-    """Arrête le service MCP local. Idempotent. Ne touche ni à Cloudflare ni à la clé API Garmin."""
+    """Arrête le service MCP local.
+
+    Idempotent. Ne touche ni au tunnel OpenAI ni à la clé API Garmin.
+    """
     get_container().mcp.stop_mcp_service()
     return get_container().mcp.get_local_status()
 

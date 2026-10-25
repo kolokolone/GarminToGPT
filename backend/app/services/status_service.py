@@ -26,7 +26,7 @@ def build_global_status(container: ServiceContainer) -> GlobalStatus:
             message = "Pont prêt; la clé API Garmin expire bientôt."
     else:
         state = "degraded"
-        message = "Application partiellement prête: vérifie MCP et Cloudflare."
+        message = "Application partiellement prête: vérifie le MCP et le tunnel OpenAI."
 
     return GlobalStatus(
         app_name=settings.app.name,

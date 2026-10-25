@@ -39,7 +39,7 @@ export function computeBridgeInfo(
 
   const tunnelRunning = tunnel.state === "running";
   const tunnelStarting = tunnel.state === "starting";
-  const tunnelStopped = tunnel.state === "stopped" || tunnel.state === "paused" || tunnel.state === "expired";
+  const tunnelStopped = tunnel.state === "stopped";
   const tunnelError = tunnel.state === "error";
 
   const garminOk = isGarminReady(garmin);
@@ -121,9 +121,8 @@ export function computeStepperSteps(
   const tunnelRunning = tunnel.state === "running";
   const tunnelStarting = tunnel.state === "starting";
   const tunnelError = tunnel.state === "error";
-  const tunnelStopped = tunnel.state === "stopped" || tunnel.state === "paused" || tunnel.state === "expired";
 
-  const urlReady = tunnelRunning && tunnel.chatgpt_mcp_url !== null;
+  const connectorReady = tunnelRunning && tunnel.tunnel_id !== null;
 
   // Step 1: Garmin
   const step1: StepInfo = garminOk
@@ -144,23 +143,23 @@ export function computeStepperSteps(
         ? { key: "mcp", label: "MCP local actif", sublabel: "Erreur du service local", cssClass: "error" }
         : { key: "mcp", label: "MCP local actif", sublabel: "Service arrêté", cssClass: "" };
 
-  // Step 3: Tunnel
+  // Step 3: Tunnel OpenAI
   const step3: StepInfo = tunnelRunning
-    ? { key: "tunnel", label: "Tunnel Cloudflare actif", sublabel: "Tunnel sécurisé opérationnel", cssClass: "completed" }
+    ? { key: "tunnel", label: "Tunnel OpenAI actif", sublabel: "Tunnel prêt", cssClass: "completed" }
     : tunnelStarting
-      ? { key: "tunnel", label: "Tunnel Cloudflare actif", sublabel: "Tunnel en démarrage", cssClass: "current" }
+      ? { key: "tunnel", label: "Tunnel OpenAI actif", sublabel: "En attente de /readyz", cssClass: "current" }
       : tunnelError
-        ? { key: "tunnel", label: "Tunnel Cloudflare actif", sublabel: "Erreur du tunnel", cssClass: "error" }
-        : { key: "tunnel", label: "Tunnel Cloudflare actif", sublabel: "Tunnel arrêté", cssClass: "" };
+        ? { key: "tunnel", label: "Tunnel OpenAI actif", sublabel: "Erreur du tunnel", cssClass: "error" }
+        : { key: "tunnel", label: "Tunnel OpenAI actif", sublabel: "Tunnel arrêté", cssClass: "" };
 
-  // Step 4: URL
-  const step4: StepInfo = urlReady
-    ? { key: "url", label: "URL ChatGPT prête", sublabel: "Lien disponible et prêt à l'emploi", cssClass: "completed" }
-    : tunnelRunning && !tunnel.chatgpt_mcp_url
-      ? { key: "url", label: "URL ChatGPT prête", sublabel: "Lien en attente", cssClass: "degraded" }
+  // Step 4: ChatGPT connector
+  const step4: StepInfo = connectorReady
+    ? { key: "url", label: "Tunnel visible dans ChatGPT", sublabel: "Connection: Tunnel + tunnel ID", cssClass: "completed" }
+    : tunnelRunning && !tunnel.tunnel_id
+      ? { key: "url", label: "Tunnel visible dans ChatGPT", sublabel: "Tunnel ID manquant", cssClass: "degraded" }
       : tunnelStarting
-        ? { key: "url", label: "URL ChatGPT prête", sublabel: "Lien en cours de création", cssClass: "current" }
-        : { key: "url", label: "URL ChatGPT prête", sublabel: "URL indisponible", cssClass: "" };
+        ? { key: "url", label: "Tunnel visible dans ChatGPT", sublabel: "En attente de /readyz", cssClass: "current" }
+        : { key: "url", label: "Tunnel visible dans ChatGPT", sublabel: "Tunnel indisponible", cssClass: "" };
 
   return [step1, step2, step3, step4];
 }
@@ -191,16 +190,17 @@ export function computeAccessInfo(
   const mcpStarting = mcpLocal?.status === "starting";
   const mcpStopping = mcpLocal?.status === "stopping";
   const mcpError = mcpLocal?.status === "error";
-
   const tunnelRunning = tunnel.state === "running";
+  const tunnelStarting = tunnel.state === "starting";
 
-  if (mcpRunning) {
+  if (mcpRunning && tunnelRunning) {
     return {
       state: "active",
       badgeLabel: "ACTIF",
       badgeClass: "badge-access-active",
       title: "ChatGPT peut accéder à vos outils Garmin",
-      message: "Le MCP local est actif et le tunnel est ouvert. ChatGPT peut utiliser les outils Garmin via l'URL ci-dessous.",
+      message:
+        "Le MCP local et le tunnel OpenAI sont actifs. ChatGPT utilise le tunnel via Connection: Tunnel.",
       primaryAction: "stop",
       primaryLabel: "Couper l'accès ChatGPT",
       secondaryAction: "restart",
@@ -208,16 +208,32 @@ export function computeAccessInfo(
     };
   }
 
+  if (mcpRunning && !tunnelRunning) {
+    return {
+      state: tunnelStarting ? "starting" : "check",
+      badgeLabel: tunnelStarting ? "DÉMARRAGE" : "TUNNEL ARRÊTÉ",
+      badgeClass: tunnelStarting ? "badge-access-starting" : "badge-access-cut",
+      title: tunnelStarting ? "Tunnel OpenAI en cours de démarrage" : "Tunnel OpenAI arrêté",
+      message: tunnelStarting
+        ? "Le tunnel répond bientôt. En attente de /readyz."
+        : "Le MCP local fonctionne, mais le tunnel OpenAI est arrêté. Démarre-le pour que ChatGPT voie le serveur.",
+      primaryAction: tunnelStarting ? "disabled" : "start",
+      primaryLabel: tunnelStarting ? "Démarrage en cours…" : "Démarrer le tunnel",
+      secondaryAction: "none",
+      secondaryLabel: "",
+    };
+  }
+
   if (mcpStopped && !mcpStarting) {
-    const noTunnel = tunnelStoppedOrStarting(tunnel) && !tunnelRunning;
+    const noTunnel = tunnel.state === "stopped" || tunnel.state === "starting";
     return {
       state: "cut",
       badgeLabel: "COUPÉ",
       badgeClass: "badge-access-cut",
       title: "ChatGPT ne peut pas accéder à vos outils Garmin",
       message: noTunnel
-        ? "Le service MCP local et le tunnel sont arrêtés. Démarrez le service local pour rétablir l'accès."
-        : "Le service MCP local est arrêté. Même si le tunnel Cloudflare existe encore, les outils Garmin ne sont plus accessibles.",
+        ? "Le service MCP local et le tunnel OpenAI sont arrêtés. Démarre l'accès pour rétablir la connexion."
+        : "Le service MCP local est arrêté. Le tunnel OpenAI ne peut pas joindre les outils Garmin.",
       primaryAction: "start",
       primaryLabel: "Activer l'accès ChatGPT",
       secondaryAction: "start",
@@ -245,7 +261,7 @@ export function computeAccessInfo(
       badgeLabel: "À VÉRIFIER",
       badgeClass: "badge-access-check",
       title: "Accès ChatGPT à Garmin à vérifier",
-      message: "Le service MCP local a rencontré une erreur. Vérifiez les logs pour plus de détails.",
+      message: "Le service MCP local a rencontré une erreur. Vérifie les logs pour plus de détails.",
       primaryAction: "retry",
       primaryLabel: "Réessayer",
       secondaryAction: "start",
@@ -264,10 +280,6 @@ export function computeAccessInfo(
     secondaryAction: "start",
     secondaryLabel: "Démarrer le service local",
   };
-}
-
-function tunnelStoppedOrStarting(t: TunnelStatus): boolean {
-  return ["stopped", "starting", "paused", "expired"].includes(t.state);
 }
 
 /* ─── Tech card helpers ─── */
@@ -314,22 +326,12 @@ export function getGarminTechInfo(garmin: GarminAuthStatus): TechCardInfo {
 export function getTunnelTechInfo(tunnel: TunnelStatus): TechCardInfo {
   switch (tunnel.state) {
     case "running":
-      return { iconClass: "green", iconLabel: "●", badgeLabel: "ACTIF", badgeClass: "badge-running", summary: "Le tunnel sécurisé est opérationnel." };
+      return { iconClass: "green", iconLabel: "●", badgeLabel: "ACTIF", badgeClass: "badge-running", summary: "Tunnel OpenAI prêt; ChatGPT peut l'utiliser." };
     case "starting":
-      return { iconClass: "blue", iconLabel: "◐", badgeLabel: "DÉMARRAGE", badgeClass: "badge-starting", summary: "Le tunnel est en cours de démarrage." };
-    case "paused":
-      return { iconClass: "orange", iconLabel: "‖", badgeLabel: "PAUSE", badgeClass: "badge-paused", summary: "Le tunnel est en pause." };
+      return { iconClass: "blue", iconLabel: "◐", badgeLabel: "DÉMARRAGE", badgeClass: "badge-starting", summary: "En attente de /readyz du tunnel OpenAI." };
     case "error":
-      return { iconClass: "red", iconLabel: "✕", badgeLabel: "ERREUR", badgeClass: "badge-error", summary: "Le tunnel a rencontré une erreur." };
+      return { iconClass: "red", iconLabel: "✕", badgeLabel: "ERREUR", badgeClass: "badge-error", summary: tunnel.last_event ?? "Le tunnel OpenAI a rencontré une erreur." };
     default:
-      return { iconClass: "gray", iconLabel: "○", badgeLabel: "ARRÊTÉ", badgeClass: "badge-off", summary: "Le tunnel est arrêté." };
+      return { iconClass: "gray", iconLabel: "○", badgeLabel: "ARRÊTÉ", badgeClass: "badge-off", summary: "Le tunnel OpenAI est arrêté." };
   }
-}
-
-/* ─── URL helpers ─── */
-
-const TRYCLOUDFLARE_MCP_URL = /^https:\/\/[a-zA-Z0-9.-]+\.trycloudflare\.com\/mcp\/?$/;
-
-export function isValidUrl(url: string | null): url is string {
-  return url !== null && TRYCLOUDFLARE_MCP_URL.test(url);
 }

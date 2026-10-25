@@ -20,9 +20,11 @@ def test_settings_rejects_non_local_hosts() -> None:
 def test_redact_text_masks_sensitive_values() -> None:
     key = "GCDC_" + "a1b2c3d4" * 10
     token = "eyJhbGciOiJub25lIn0.eyJleHAiOjE3OTMwMzMwNDF9.signature"
+    openai_key = "sk-test-runtime-key-1234567890"
     text = (
         "email=user@example.com password=hunter2 token=abc "
-        f"Authorization: Bearer xyz Authorization: ApiKey {key} api_key={key} {token}"
+        f"Authorization: Bearer xyz Authorization: ApiKey {key} api_key={key} {token} "
+        f"OpenAI {openai_key}"
     )
 
     redacted = redact_text(text)
@@ -33,6 +35,7 @@ def test_redact_text_masks_sensitive_values() -> None:
     assert "xyz" not in redacted
     assert key not in redacted
     assert token not in redacted
+    assert openai_key not in redacted
     assert "[REDACTED]" in redacted
 
 
@@ -75,7 +78,7 @@ def test_packaged_mcp_commands_use_the_official_personal_api_adapter() -> None:
 
 def _settings_dict() -> dict[str, object]:
     return {
-        "app": {"name": "GarminToGPT", "version": "1.0.0", "environment": "test"},
+        "app": {"name": "GarminToGPT", "version": "1.1.0", "environment": "test"},
         "server": {"host": "127.0.0.1", "backend_port": 8000, "frontend_port": 3000},
         "mcp": {
             "host": "127.0.0.1",
@@ -86,12 +89,17 @@ def _settings_dict() -> dict[str, object]:
             "proxy_command": ["uvx", "mcp-proxy"],
         },
         "garmin": {"rotation_warning_days": 7, "timeout_seconds": 5},
-        "cloudflare": {
-            "mode": "quick",
-            "local_url": "http://127.0.0.1:8080",
-            "tunnel_name": "",
-            "hostname": "",
-            "command": "cloudflared",
+        "tunnel": {
+            "provider": "openai",
+            "command": "tunnel-client",
+            "health_host": "127.0.0.1",
+            "health_port": 8091,
+            "mcp_server_url": "http://127.0.0.1:8080/mcp",
+            "connector_url": "https://chatgpt.com/#settings/Connectors",
+            "tunnels_page_url": "https://platform.openai.com/settings/organization/tunnels",
+            "api_keys_page_url": "https://platform.openai.com/settings/organization/api-keys",
+            "ready_timeout_seconds": 30,
+            "binary_version": "0.0.18",
         },
         "runtime": {
             "dir": "runtime",

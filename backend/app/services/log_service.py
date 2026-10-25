@@ -4,13 +4,13 @@ from app.utils.redact import redact_lines
 
 
 class LogService:
-    ALLOWED = {"backend", "mcp", "cloudflare", "cloudflared", "auth", "tests"}
+    ALLOWED = {"backend", "mcp", "tunnel", "auth", "tests"}
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
     def read_logs(self, service: str, lines: int = 200) -> LogResult:
-        normalized = "cloudflared" if service == "cloudflare" else service
+        normalized = service
         if normalized not in self.ALLOWED:
             return LogResult(service=service, lines=["Service de log inconnu."], truncated=False)
         path = self.settings.logs.path / f"{normalized}.log"

@@ -19,7 +19,7 @@ class ServiceContainer:
         self.healthchecks = HealthcheckService(self.settings)
         self.garmin = GarminAuthService(self.settings, self.state)
         self.mcp = McpService(self.settings, self.process_manager, self.healthchecks)
-        self.tunnel = TunnelService(self.settings, self.process_manager, self.state)
+        self.tunnel = TunnelService(self.settings, self.process_manager)
         self.logs = LogService(self.settings)
         self.tests = TestService(self.settings, self.garmin, self.mcp, self.tunnel)
 

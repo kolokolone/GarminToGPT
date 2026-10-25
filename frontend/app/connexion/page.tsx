@@ -359,7 +359,7 @@ export default function ConnexionPage() {
       <ConfirmDialog
         open={confirmDelete}
         title="Supprimer la clé API Garmin ?"
-        message="La clé locale sera supprimée et le pont MCP/Cloudflare sera arrêté. Tu pourras enregistrer une nouvelle clé à tout moment."
+        message="La clé locale sera supprimée et le pont MCP/tunnel OpenAI sera arrêté. Tu pourras enregistrer une nouvelle clé à tout moment."
         confirmLabel="Supprimer"
         onCancel={() => setConfirmDelete(false)}
         onConfirm={() => void removeKey()}

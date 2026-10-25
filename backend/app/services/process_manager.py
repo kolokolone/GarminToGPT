@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 import threading
+from collections.abc import Mapping
 from datetime import datetime
 from os import environ
 from pathlib import Path
@@ -52,6 +53,7 @@ class ProcessManager:
         command: list[str],
         port: int | None = None,
         reset_log: bool = False,
+        env: Mapping[str, str] | None = None,
     ) -> ServiceActionResult:
         current = self.status(name)
         if current.status == "running":
@@ -88,6 +90,8 @@ class ProcessManager:
         if reset_log:
             self._archive_log(log_path)
         child_env = environ.copy()
+        if env:
+            child_env.update(env)
         child_env.setdefault("PYTHONIOENCODING", "utf-8")
         child_env.setdefault("PYTHONUTF8", "1")
         try:

@@ -70,6 +70,10 @@ def register_frontend_routes(app: FastAPI, static_dir: Path) -> None:
     def tests() -> FileResponse:
         return page("tests.html")
 
+    @app.api_route("/tunnel", methods=["GET", "HEAD"], include_in_schema=False)
+    def tunnel_page() -> FileResponse:
+        return page("tunnel.html")
+
     @app.get("/connexion/__next.connexion.__PAGE__.txt", include_in_schema=False)
     def connexion_page_rsc() -> FileResponse:
         return page("connexion.txt")
@@ -77,6 +81,10 @@ def register_frontend_routes(app: FastAPI, static_dir: Path) -> None:
     @app.get("/tests/__next.tests.__PAGE__.txt", include_in_schema=False)
     def tests_page_rsc() -> FileResponse:
         return page("tests.txt")
+
+    @app.get("/tunnel/__next.tunnel.__PAGE__.txt", include_in_schema=False)
+    def tunnel_page_rsc() -> FileResponse:
+        return page("tunnel.txt")
 
 
 app = create_app()

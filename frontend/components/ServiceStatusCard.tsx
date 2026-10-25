@@ -151,20 +151,30 @@ function TunnelTechContent({ data, onLogs }: { data: TunnelStatus; onLogs?: () =
   const info = getTunnelTechInfo(data);
   return (
     <>
-      <TechCardHeader title="Cloudflare Tunnel" {...info} />
+      <TechCardHeader title="Tunnel OpenAI" {...info} />
       <p className="tech-card-summary">{info.summary}</p>
       <div className="details-grid">
         <div className="details-item">
-          <span className="details-label">Mode</span>
-          <span className="details-value">{data.mode}</span>
+          <span className="details-label">Fournisseur</span>
+          <span className="details-value">OpenAI</span>
         </div>
         <div className="details-item">
-          <span className="details-label">PID</span>
-          <span className="details-value">{data.pid ?? "-"}</span>
+          <span className="details-label">Tunnel ID</span>
+          <span className="details-value">{data.tunnel_id ?? "non configuré"}</span>
         </div>
         <div className="details-item">
-          <span className="details-label">URL publique</span>
-          <span className="details-value">{data.public_url ?? "non détectée"}</span>
+          <span className="details-label">Readiness</span>
+          <span className="details-value">
+            {data.ready ? "prêt" : data.health_status ? `HTTP ${data.health_status}` : "en attente"}
+          </span>
+        </div>
+        <div className="details-item">
+          <span className="details-label">Tableau de bord</span>
+          <span className="details-value">
+            {data.ui_url && (data.state === "running" || data.state === "starting") ? (
+              <a href={data.ui_url} target="_blank" rel="noreferrer">Ouvrir</a>
+            ) : "-"}
+          </span>
         </div>
         <div className="details-item">
           <span className="details-label">Dernier événement</span>

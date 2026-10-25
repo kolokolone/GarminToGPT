@@ -5,7 +5,6 @@ from collections.abc import Callable
 from app.core.config import Settings
 from app.models.tests import TestDefinition, TestListResult, TestResult, TestRunAllResult
 from app.services.garmin_auth_service import GarminAuthService
-from app.services.mcp_probe_service import probe_mcp_endpoint
 from app.services.mcp_service import McpService
 from app.services.tunnel_service import TunnelService
 from app.utils.ports import is_port_open
@@ -73,7 +72,7 @@ class TestService:
                 TestDefinition(
                     id="check_dependencies",
                     name="Dépendances disponibles",
-                    description="Vérifie uvx et cloudflared.",
+                    description="Vérifie les dépendances Python.",
                 ),
                 self._check_dependencies,
             ),
@@ -128,45 +127,45 @@ class TestService:
                 ),
                 self._check_mcp_tools,
             ),
-            "check_cloudflared_available": (
+            "check_tunnel_client_installed": (
                 TestDefinition(
-                    id="check_cloudflared_available",
-                    name="Cloudflared disponible",
-                    description="Vérifie la commande cloudflared.",
+                    id="check_tunnel_client_installed",
+                    name="Client tunnel OpenAI installé",
+                    description="Vérifie le binaire tunnel-client.",
                 ),
-                self._check_cloudflared,
+                self._check_tunnel_client,
             ),
             "check_tunnel_process": (
                 TestDefinition(
                     id="check_tunnel_process",
-                    name="Tunnel Cloudflare actif",
-                    description="Vérifie le processus tunnel.",
+                    name="Tunnel OpenAI actif",
+                    description="Vérifie le processus tunnel-client.",
                 ),
                 self._check_tunnel_process,
             ),
             "check_tunnel_public_url": (
                 TestDefinition(
                     id="check_tunnel_public_url",
-                    name="URL publique détectée",
-                    description="Extrait l'URL Cloudflare.",
+                    name="Tunnel OpenAI prêt",
+                    description="Vérifie /readyz du tunnel-client.",
                 ),
-                self._check_tunnel_url,
+                self._check_tunnel_ready,
             ),
             "check_remote_mcp_endpoint": (
                 TestDefinition(
                     id="check_remote_mcp_endpoint",
-                    name="Endpoint distant /mcp",
-                    description="Teste l'URL publique.",
+                    name="Tunnel OpenAI configuré",
+                    description="Vérifie le tunnel ID et la runtime key.",
                 ),
-                self._check_remote_endpoint,
+                self._check_tunnel_connector,
             ),
             "check_chatgpt_url_format": (
                 TestDefinition(
                     id="check_chatgpt_url_format",
-                    name="Format URL ChatGPT",
-                    description="Valide l'URL à copier.",
+                    name="Connecteur ChatGPT",
+                    description="Vérifie que ChatGPT peut utiliser le tunnel.",
                 ),
-                self._check_chatgpt_url,
+                self._check_chatgpt_connector,
             ),
             "full_smoke_test": (
                 TestDefinition(
@@ -186,18 +185,23 @@ class TestService:
         )
 
     def _check_dependencies(self) -> tuple[bool, str, str | None]:
-        missing = [
-            command
-            for command in ("uvx", self.settings.cloudflare.command)
-            if shutil.which(command) is None
-        ]
-        if missing:
+        if shutil.which("uvx") is None:
+            return False, "uvx introuvable.", "Installe uv."
+        return True, "Dépendances Python disponibles.", None
+
+    def _check_tunnel_client(self) -> tuple[bool, str, str | None]:
+        binary = self.tunnel.binary.status()
+        if binary.installed:
             return (
-                False,
-                f"Dépendances absentes: {', '.join(missing)}.",
-                "Installe uv et cloudflared.",
+                True,
+                f"tunnel-client installé ({binary.version or 'version inconnue'}).",
+                None,
             )
-        return True, "Dépendances minimales disponibles.", None
+        return (
+            False,
+            "tunnel-client non installé.",
+            "Ouvre /tunnel pour l'installer automatiquement.",
+        )
 
     def _check_api_key(self) -> tuple[bool, str, str | None]:
         status = self.garmin.status()
@@ -235,88 +239,49 @@ class TestService:
         tools = self.mcp.classify_mcp_tools()
         return True, f"{len(tools.read_tools)} lecture, {len(tools.write_tools)} écriture.", None
 
-    def _check_cloudflared(self) -> tuple[bool, str, str | None]:
-        ok = shutil.which(self.settings.cloudflare.command) is not None
-        return (
-            ok,
-            "cloudflared disponible." if ok else "cloudflared introuvable.",
-            "Installe cloudflared.",
-        )
-
     def _check_tunnel_process(self) -> tuple[bool, str, str | None]:
         status = self.tunnel.get_tunnel_status()
         return status.state == "running", status.process.message, "Allume le tunnel."
 
-    def _check_tunnel_url(self) -> tuple[bool, str, str | None]:
-        url = self.tunnel._get_public_url()
+    def _check_tunnel_ready(self) -> tuple[bool, str, str | None]:
+        status = self.tunnel.get_tunnel_status()
         return (
-            bool(url),
-            url or "Aucune URL publique.",
-            "Attends le démarrage ou consulte les logs Cloudflare.",
+            status.ready,
+            status.last_event or "Tunnel non prêt.",
+            "Démarre le tunnel OpenAI et consulte /tunnel.",
         )
 
-    def _check_remote_endpoint(self) -> tuple[bool, str, str | None]:
-        url = self.tunnel._get_chatgpt_mcp_url()
-        if not url:
-            return False, "Aucune URL /mcp publique.", "Allume le tunnel."
-        if not url.startswith("https://"):
-            return False, "L'URL publique doit être HTTPS.", "Vérifie la configuration du tunnel."
-        # Probe MCP réel sur l'URL distante (sans session, juste initialize)
-        base_url = url.replace("/mcp", "")
-        import asyncio
-        try:
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                # Thread AnyIO sans boucle – asyncio.run lève la sienne
-                timeout = self.settings.timeouts.healthcheck_seconds
-                probe = asyncio.run(
-                    probe_mcp_endpoint(base_url, timeout_seconds=timeout),
-                )
-            else:
-                if loop.is_running():
-                    timeout = self.settings.timeouts.healthcheck_seconds
-                    future = asyncio.run_coroutine_threadsafe(
-                        probe_mcp_endpoint(base_url, timeout_seconds=timeout),
-                        loop,
-                    )
-                    probe = future.result(timeout=timeout + 5)
-                else:
-                    timeout = self.settings.timeouts.healthcheck_seconds
-                    probe = asyncio.run(
-                        probe_mcp_endpoint(base_url, timeout_seconds=timeout),
-                    )
-        except Exception as exc:
-            return False, f"Probe distant échoué: {exc}", "Vérifie tunnel et MCP."
-        if probe.ok:
-            msg = (
-                f"MCP distant OK – {probe.tools_count} outil(s), "
-                f"serveur {probe.server_name or 'inconnu'}."
-            )
-            return True, msg, None
-        if probe.error and "530" in str(probe.error):
+    def _check_tunnel_connector(self) -> tuple[bool, str, str | None]:
+        config = self.tunnel.get_config_status()
+        if not config.configured:
             return (
-                False, probe.error,
-                "Démarre le service MCP local puis régénère le tunnel Cloudflare.",
+                False,
+                "Tunnel OpenAI non configuré.",
+                "Ouvre /tunnel pour renseigner le tunnel ID et la runtime API key.",
             )
-        return (
-            False,
-            probe.error or "Probe MCP distant a échoué.",
-            "Vérifie l'état du tunnel et du service MCP.",
-        )
+        return True, f"Tunnel configuré: {config.tunnel_id}.", None
 
-    def _check_chatgpt_url(self) -> tuple[bool, str, str | None]:
-        url = self.tunnel._get_chatgpt_mcp_url()
-        ok = bool(url and url.startswith("https://") and url.endswith(self.settings.mcp.endpoint))
-        return ok, url or "URL absente.", "Le tunnel doit fournir une URL HTTPS terminée par /mcp."
+    def _check_chatgpt_connector(self) -> tuple[bool, str, str | None]:
+        status = self.tunnel.get_tunnel_status()
+        ok = status.ready and bool(status.tunnel_id)
+        return (
+            ok,
+            (
+                f"Tunnel prêt: {status.tunnel_id}. "
+                "ChatGPT → Connectors → Connection: Tunnel."
+                if ok
+                else status.last_event or "Tunnel non prêt."
+            ),
+            "Démarre le tunnel et vérifie /readyz dans /tunnel.",
+        )
 
     def _check_smoke(self) -> tuple[bool, str, str | None]:
         config_ok, _, _ = self._check_config()
         dependency_ok, _, _ = self._check_dependencies()
         token_ok, _, _ = self._check_api_key()
         mcp_ok, _, _ = self._check_mcp_port()
-        url_ok, _, _ = self._check_chatgpt_url()
-        ok = config_ok and dependency_ok and token_ok and mcp_ok and url_ok
+        tunnel_ok, _, _ = self._check_chatgpt_connector()
+        ok = config_ok and dependency_ok and token_ok and mcp_ok and tunnel_ok
         return (
             ok,
             "Smoke test complet terminé." if ok else "Smoke test incomplet.",

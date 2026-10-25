@@ -7,7 +7,7 @@ services:
     init: true
 
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
     environment:
       GARMINTOGPT_ENV: local
@@ -19,7 +19,7 @@ services:
       - garmintogpt_logs:/app/logs
       - garmintogpt_runtime:/app/runtime
       - garmintogpt_garmin:/home/app/.config/garmin
-      - garmintogpt_cloudflared:/home/app/.cloudflared
+      - garmintogpt_openai:/home/app/.config/garmintogpt
 
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/status', timeout=5)"]
@@ -34,4 +34,4 @@ volumes:
   garmintogpt_logs:
   garmintogpt_runtime:
   garmintogpt_garmin:
-  garmintogpt_cloudflared:
+  garmintogpt_openai:

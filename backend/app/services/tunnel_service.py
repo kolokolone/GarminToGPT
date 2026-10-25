@@ -1,225 +1,348 @@
+"""Orchestration for the OpenAI Secure MCP Tunnel client.
+
+The client is an outbound-only long-poll daemon: it forwards MCP requests from
+OpenAI to the local ``mcp-proxy``. There is no public URL. ChatGPT selects the
+tunnel in ``Settings → Connectors → Connection: Tunnel`` using the tunnel ID.
+
+Health is read from the client's local ``/readyz`` endpoint; no URL log
+parsing or public endpoint is involved.
+"""
+
+from __future__ import annotations
+
+import hmac
 import logging
-import re
-from datetime import datetime, timezone
+from pathlib import Path
+
+import httpx
 
 from app.core.config import Settings
-from app.models.tunnel import TunnelActionResult, TunnelStatus, TunnelUrlResult
+from app.models.tunnel import (
+    TunnelActionResult,
+    TunnelBinaryResult,
+    TunnelConfigResult,
+    TunnelConfigStatus,
+    TunnelState,
+    TunnelStatus,
+)
+from app.openai_tunnel import (
+    OpenAITunnelConfigStore,
+    TunnelBinaryError,
+    TunnelBinaryManager,
+    TunnelClientValidator,
+    TunnelValidationError,
+)
 from app.services.process_manager import ProcessManager
-from app.services.state_store import StateStore
 
 logger = logging.getLogger("GarminToGPT.tunnel")
 
-URL_PATTERN = re.compile(r"https://[a-zA-Z0-9.-]+\.trycloudflare\.com")
-_START_TS_KEY = "tunnel_start_ts"
+_PROCESS_NAME = "tunnel"
 
 
 class TunnelService:
     def __init__(
-        self, settings: Settings, process_manager: ProcessManager, state: StateStore
+        self,
+        settings: Settings,
+        process_manager: ProcessManager,
+        *,
+        store: OpenAITunnelConfigStore | None = None,
+        binary: TunnelBinaryManager | None = None,
+        validator: TunnelClientValidator | None = None,
     ) -> None:
         self.settings = settings
         self.process_manager = process_manager
-        self.state = state
-        self._current_url: str | None = None
-        self._session_start_pos: int = 0
+        self.store = store or OpenAITunnelConfigStore()
+        self.binary = binary or TunnelBinaryManager(settings)
+        self.validator = validator or TunnelClientValidator(self.binary)
 
-    # ------------------------------------------------------------------
-    # Public actions
-    # ------------------------------------------------------------------
+    # -- configuration -----------------------------------------------------
+
+    def get_config_status(self) -> TunnelConfigStatus:
+        config = self.store.load()
+        binary = self.binary.status()
+        if config.configured and not config.editable:
+            message = "Tunnel OpenAI configuré par l'environnement."
+        elif config.configured:
+            message = "Tunnel OpenAI configuré."
+        else:
+            message = "Tunnel OpenAI non configuré. Renseigne le tunnel ID et la runtime API key."
+        return TunnelConfigStatus(
+            configured=config.configured,
+            tunnel_id=config.tunnel_id,
+            key_hint=self.store.hint(config.api_key),
+            source=config.source,
+            key_source=config.key_source,
+            tunnel_id_source=config.tunnel_id_source,
+            editable=config.editable,
+            binary_installed=binary.installed,
+            binary_version=binary.version,
+            message=message,
+        )
+
+    def configure(self, tunnel_id: str, api_key: str) -> TunnelConfigResult:
+        normalized_id = self.store.validate_tunnel_id(tunnel_id)
+        normalized_key = self.store.validate_api_key(api_key)
+        previous = self.store.load()
+        same = (
+            previous.tunnel_id == normalized_id
+            and previous.api_key is not None
+            and hmac.compare_digest(previous.api_key, normalized_key)
+        )
+
+        validation = self.validator.validate(normalized_id, normalized_key)
+        if not validation.ok:
+            raise TunnelValidationError(
+                validation.message,
+                http_status=validation.http_status,
+            )
+
+        self.store.save(normalized_id, normalized_key)
+        if not same and self.get_tunnel_status().state in {"running", "starting"}:
+            self.restart_tunnel()
+
+        name = f" ({validation.name})" if validation.name else ""
+        return TunnelConfigResult(
+            ok=True,
+            changed=not same,
+            message=f"Tunnel OpenAI validé et enregistré{name}.",
+            config=self.get_config_status(),
+            status=self.get_tunnel_status(),
+        )
+
+    def remove_config(self) -> TunnelConfigResult:
+        self.stop_tunnel()
+        deleted = self.store.clear()
+        config = self.get_config_status()
+        if config.configured:
+            message = (
+                "Fichiers locaux supprimés, mais l'environnement OpenAI reste "
+                "prioritaire. Retire CONTROL_PLANE_TUNNEL_ID / CONTROL_PLANE_API_KEY."
+            )
+        else:
+            message = "Configuration du tunnel OpenAI supprimée."
+        return TunnelConfigResult(
+            ok=True,
+            changed=deleted,
+            message=message,
+            config=config,
+            status=self.get_tunnel_status(),
+        )
+
+    def install_binary(self) -> TunnelBinaryResult:
+        try:
+            binary = self.binary.ensure()
+        except TunnelBinaryError as exc:
+            logger.error("Tunnel client installation failed: %s", exc)
+            return TunnelBinaryResult(ok=False, installed=False, message=str(exc))
+        return TunnelBinaryResult(
+            ok=True,
+            installed=True,
+            version=binary.version,
+            path=str(binary.path),
+            message="Client tunnel OpenAI installé.",
+        )
+
+    # -- actions -----------------------------------------------------------
 
     def ensure_tunnel(self) -> TunnelActionResult:
-        """Idempotent: démarre le tunnel seulement s'il n'est ni running ni starting.
-
-        Si le tunnel est déjà actif ou en cours de démarrage, ne fait rien
-        et retourne le statut existant sans muter l'URL.
-        """
         status = self.get_tunnel_status()
-        if status.state in ("running", "starting"):
-            logger.info(
-                "Cloudflare tunnel already %s; reusing existing tunnel (URL: %s)",
-                status.state,
-                status.chatgpt_mcp_url or "not yet available",
-            )
-            return TunnelActionResult(
+        if status.state in {"running", "starting"}:
+            logger.info("OpenAI tunnel already %s; reusing it", status.state)
+            return self._action(
                 ok=True,
-                status=status.state,
-                message=f"Tunnel déjà {status.state}.",
+                message=f"Tunnel OpenAI déjà {status.state}.",
+                state=status.state,
                 pid=status.pid,
-                public_url=status.public_url,
-                chatgpt_mcp_url=status.chatgpt_mcp_url,
             )
-
-        logger.info("Cloudflare tunnel missing/stopped; starting tunnel")
+        if not status.configured:
+            return self._action(
+                ok=False,
+                message=(
+                    "Tunnel OpenAI non configuré. Ouvre /tunnel pour renseigner "
+                    "le tunnel ID et la runtime API key."
+                ),
+                state="error",
+            )
         return self.start_tunnel()
 
     def start_tunnel(self) -> TunnelActionResult:
-        self._clear_current_url()
+        config = self.store.load()
+        if not config.configured or not config.tunnel_id or not config.api_key:
+            return self._action(
+                ok=False,
+                message=(
+                    "Tunnel OpenAI non configuré. Ouvre /tunnel pour renseigner "
+                    "le tunnel ID et la runtime API key."
+                ),
+                state="error",
+            )
 
-        if self.settings.cloudflare.mode == "named":
-            command = [
-                self.settings.cloudflare.command,
-                "tunnel",
-                "run",
-                self.settings.cloudflare.tunnel_name,
-            ]
+        try:
+            binary = self.binary.ensure()
+        except TunnelBinaryError as exc:
+            logger.error("Tunnel client unavailable: %s", exc)
+            return self._action(ok=False, message=str(exc), state="error")
+
+        command = [
+            str(binary.path),
+            "run",
+            "--control-plane.tunnel-id",
+            config.tunnel_id,
+            "--control-plane.api-key",
+            "env:CONTROL_PLANE_API_KEY",
+            "--mcp.server-url",
+            f"url={self.mcp_server_url},channel=main",
+            "--health.listen-addr",
+            f"{self.settings.tunnel.health_host}:{self.settings.tunnel.health_port}",
+            "--log.format",
+            "struct-text",
+            "--log.level",
+            "warn",
+        ]
+        result = self.process_manager.start(
+            _PROCESS_NAME,
+            command,
+            port=self.settings.tunnel.health_port,
+            reset_log=True,
+            env={
+                "CONTROL_PLANE_API_KEY": config.api_key,
+                "CONTROL_PLANE_TUNNEL_ID": config.tunnel_id,
+            },
+        )
+        if result.ok:
+            logger.info("OpenAI tunnel starting (PID %s)", result.pid)
         else:
-            command = [
-                self.settings.cloudflare.command,
-                "tunnel",
-                "--url",
-                self.settings.cloudflare.local_url,
-            ]
-        result = self.process_manager.start("cloudflared", command, reset_log=True)
-
-        # Enregistrer la position du fichier de log APRÈS start() →
-        # toutes les lignes antérieures (anciennes sessions) sont ignorées
-        self._session_start_pos = self._current_log_size()
-
-        return TunnelActionResult(
+            logger.error("OpenAI tunnel failed to start: %s", result.message)
+        return self._action(
             ok=result.ok,
-            status=result.status,
-            message=result.message,
+            message=(
+                "Tunnel OpenAI en cours de démarrage. En attente de /readyz."
+                if result.ok
+                else result.message
+            ),
+            state="starting" if result.ok else "error",
             pid=result.pid,
-            public_url=None,
-            chatgpt_mcp_url=None,
         )
 
     def stop_tunnel(self) -> TunnelActionResult:
-        result = self.process_manager.stop("cloudflared")
-        self.state.set_value("tunnel_paused", False)
-        self._current_url = None
-        return TunnelActionResult(
+        result = self.process_manager.stop(_PROCESS_NAME)
+        logger.info("OpenAI tunnel stopped")
+        return self._action(
             ok=result.ok,
-            status="stopped",
-            message=result.message,
+            message="Tunnel OpenAI arrêté.",
+            state="stopped",
             pid=result.pid,
-            public_url=None,
-            chatgpt_mcp_url=None,
         )
 
-    def pause_tunnel(self) -> TunnelActionResult:
-        result = self.process_manager.stop("cloudflared")
-        self.state.set_value("tunnel_paused", True)
-        return TunnelActionResult(
-            ok=result.ok,
-            status="paused",
-            message="Tunnel mis en pause. L'URL publique n'est plus active.",
-            public_url=None,
-            chatgpt_mcp_url=None,
-        )
-
-    def resume_tunnel(self) -> TunnelActionResult:
-        self.state.set_value("tunnel_paused", False)
-        return self.start_tunnel()
-
-    def regenerate_tunnel(self) -> TunnelActionResult:
+    def restart_tunnel(self) -> TunnelActionResult:
         self.stop_tunnel()
         return self.start_tunnel()
 
-    # ------------------------------------------------------------------
-    # Status / URL readout
-    # ------------------------------------------------------------------
+    # -- status ------------------------------------------------------------
 
     def get_tunnel_status(self) -> TunnelStatus:
-        process = self.process_manager.status("cloudflared")
-        paused = bool(self.state.read().get("tunnel_paused"))
-        public_url = self._get_public_url()
-        state = "paused" if paused else process.status
-        if state == "unhealthy":
+        config = self.store.load()
+        binary = self.binary.status()
+        process = self.process_manager.status(_PROCESS_NAME)
+        ready = False
+        health_status: int | None = None
+        health_message = process.message
+
+        if process.status == "running":
+            ready, health_status, health_message = self._check_ready()
+
+        if process.status == "running":
+            state = "running" if ready else "starting"
+        elif process.status == "error":
             state = "error"
-        if state == "running" and not public_url and self.settings.cloudflare.mode == "quick":
-            state = "starting"
+        else:
+            state = "stopped"
+
+        if not config.configured:
+            health_message = (
+                "Tunnel OpenAI non configuré. Ouvre /tunnel pour renseigner "
+                "le tunnel ID et la runtime API key."
+            )
+
+        base_url = self.health_base_url
         return TunnelStatus(
             state=state,
-            mode=self.settings.cloudflare.mode,
-            public_url=public_url,
-            chatgpt_mcp_url=self._get_chatgpt_mcp_url(),
+            provider="openai",
+            configured=config.configured,
+            tunnel_id=config.tunnel_id,
+            api_key_configured=bool(config.api_key),
+            binary_installed=binary.installed,
+            binary_version=binary.version,
+            ready=ready,
+            health_status=health_status,
+            health_url=f"{base_url}/readyz",
+            ui_url=f"{base_url}/ui",
+            connector_url=self.settings.tunnel.connector_url,
             pid=process.pid,
-            last_event=self._detect_cloudflare_error() or process.message,
+            last_event=health_message,
             process=process,
         )
 
-    def get_url_result(self) -> TunnelUrlResult:
-        public_url = self._get_public_url()
-        return TunnelUrlResult(
-            public_url=public_url,
-            chatgpt_mcp_url=self._get_chatgpt_mcp_url(),
-            message="URL Cloudflare active." if public_url else "Aucune URL Cloudflare détectée.",
+    # -- properties --------------------------------------------------------
+
+    @property
+    def mcp_server_url(self) -> str:
+        return self.settings.tunnel.mcp_server_url or (
+            f"http://{self.settings.mcp.host}:{self.settings.mcp.port}"
+            f"{self.settings.mcp.endpoint}"
         )
 
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
+    @property
+    def health_base_url(self) -> str:
+        return (
+            f"http://{self.settings.tunnel.health_host}:"
+            f"{self.settings.tunnel.health_port}"
+        )
 
-    def _clear_current_url(self) -> None:
-        """Reset cached URL and mark a new session start in state."""
-        self._current_url = None
-        self._session_start_pos = 0
-        state_data = self.state.read()
-        state_data.pop("cloudflare_public_url", None)
-        state_data[_START_TS_KEY] = datetime.now(timezone.utc).isoformat()  # noqa: UP017 – Python <3.11
-        self.state.write(state_data)
+    @property
+    def connector_url(self) -> str:
+        return self.settings.tunnel.connector_url
 
-    def _get_public_url(self) -> str | None:
-        # Cache chaud : déjà trouvée dans cette session
-        if self._current_url:
-            return self._current_url
+    # -- helpers -----------------------------------------------------------
 
-        # Mode nommé : toujours utiliser le hostname configuré
-        if self.settings.cloudflare.mode == "named" and self.settings.cloudflare.hostname:
-            url = f"https://{self.settings.cloudflare.hostname}".rstrip("/")
-            self._current_url = url
-            return url
+    def _check_ready(self) -> tuple[bool, int | None, str]:
+        try:
+            response = httpx.get(
+                f"{self.health_base_url}/readyz",
+                timeout=min(3, self.settings.timeouts.healthcheck_seconds),
+            )
+        except httpx.RequestError as exc:
+            return False, None, f"En attente de /readyz: {exc}"
 
-        # Mode quick : ne retourner une URL que si cloudflared tourne
-        proc = self.process_manager.status("cloudflared")
-        if proc.status != "running":
-            return None
+        if response.status_code == 200:
+            return True, 200, "Tunnel OpenAI prêt."
+        detail = " ".join(response.text.split())[:200]
+        return (
+            False,
+            response.status_code,
+            f"/readyz HTTP {response.status_code}" + (f": {detail}" if detail else ""),
+        )
 
-        url = self._parse_cloudflared_logs_for_url()
-        if url:
-            self._current_url = url
-            self.state.set_value("cloudflare_public_url", url)
-        return url
+    @staticmethod
+    def _action(
+        *,
+        ok: bool,
+        message: str,
+        state: TunnelState,
+        pid: int | None = None,
+    ) -> TunnelActionResult:
+        return TunnelActionResult(
+            ok=ok,
+            status=state,
+            message=message,
+            pid=pid,
+            state=state,
+        )
 
-    def _get_chatgpt_mcp_url(self) -> str | None:
-        public_url = self._get_public_url()
-        if not public_url:
-            return None
-        return f"{public_url.rstrip('/')}{self.settings.mcp.endpoint}"
+    @property
+    def key_path(self) -> Path:
+        return self.store.key_file
 
-    def _current_log_size(self) -> int:
-        log_path = self.settings.logs.path / "cloudflared.log"
-        if log_path.exists():
-            return log_path.stat().st_size
-        return 0
-
-    def _parse_cloudflared_logs_for_url(self) -> str | None:
-        """Parcourt le log cloudflared à partir de _session_start_pos
-        et retourne la dernière URL trycloudflare trouvée."""
-        log_path = self.settings.logs.path / "cloudflared.log"
-        if not log_path.exists():
-            return None
-
-        with log_path.open("r", encoding="utf-8", errors="replace") as f:
-            f.seek(self._session_start_pos)
-            text = f.read()
-
-        matches = URL_PATTERN.findall(text)
-        return matches[-1].rstrip("/") if matches else None
-
-    def _detect_cloudflare_error(self) -> str | None:
-        log_path = self.settings.logs.path / "cloudflared.log"
-        if not log_path.exists():
-            return None
-        tail = "\n".join(log_path.read_text(encoding="utf-8", errors="replace").splitlines()[-200:])
-        for marker in (
-            "1033",
-            "530",
-            "connection refused",
-            "origin service unavailable",
-            "tunnel expired",
-        ):
-            if marker.lower() in tail.lower():
-                return f"Erreur Cloudflare détectée: {marker}"
-        return None
+    @property
+    def config_path(self) -> Path:
+        return self.store.config_file

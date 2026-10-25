@@ -246,7 +246,7 @@ def _write_config(tmp_path: Path) -> Path:
     content = f"""
 app:
   name: GarminToGPT
-  version: 1.0.0
+  version: 1.1.0
   environment: test
 server:
   host: 127.0.0.1
@@ -262,12 +262,17 @@ mcp:
 garmin:
   rotation_warning_days: 7
   timeout_seconds: 5
-cloudflare:
-  mode: quick
-  local_url: http://127.0.0.1:18080
-  tunnel_name: ""
-  hostname: ""
-  command: cloudflared
+tunnel:
+  provider: openai
+  command: tunnel-client
+  health_host: 127.0.0.1
+  health_port: 18091
+  mcp_server_url: http://127.0.0.1:18080/mcp
+  connector_url: https://chatgpt.com/#settings/Connectors
+  tunnels_page_url: https://platform.openai.com/settings/organization/tunnels
+  api_keys_page_url: https://platform.openai.com/settings/organization/api-keys
+  ready_timeout_seconds: 30
+  binary_version: "0.0.18"
 runtime:
   dir: "{runtime_dir}"
   pid_dir: "{runtime_dir / "pids"}"

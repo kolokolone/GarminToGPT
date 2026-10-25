@@ -1,6 +1,6 @@
 # agent.md — Règles de travail pour l’agent OpenCode
 
-> **Mise à jour v1.0** : la connexion Garmin de ce document est remplacée par la Personal API officielle (`garmin-connect-personal-api-python`) et le serveur `garmin-personal-mcp`. Les règles de sécurité, de tests et d'UI restent valables. Voir `README.md` et `docs/architecture.md` pour le flux actuel.
+> **Mise à jour v1.1** : la connexion Garmin utilise la Personal API officielle (`garmin-connect-personal-api-python`) et `garmin-personal-mcp` ; le tunnel Cloudflare est remplacé par `openai/tunnel-client` (page `/tunnel`, `Connection: Tunnel`). Les règles de sécurité, de tests et d'UI restent valables. Voir `README.md`, `docs/architecture.md` et `docs/openai-tunnel.md` pour le flux actuel.
 
 
 ## 1. Rôle de l’agent

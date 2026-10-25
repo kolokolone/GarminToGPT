@@ -11,7 +11,7 @@ from app.core.paths import project_root, resolve_project_path
 
 class AppConfig(BaseModel):
     name: str = "GarminToGPT"
-    version: str = "1.0.0"
+    version: str = "1.1.0"
     environment: str = "local"
 
 
@@ -71,12 +71,52 @@ class GarminConfig(BaseModel):
         return value
 
 
-class CloudflareConfig(BaseModel):
-    mode: Literal["quick", "named"] = "quick"
-    local_url: str = "http://127.0.0.1:8080"
-    tunnel_name: str = ""
-    hostname: str = ""
-    command: str = "cloudflared"
+class OpenAITunnelConfig(BaseModel):
+    """OpenAI Secure MCP Tunnel settings.
+
+    The tunnel ID and runtime API key are user secrets and live in the
+    ``openai_tunnel`` store, not in this file. The tunnel client makes only
+    outbound HTTPS connections; no public URL is created.
+    """
+
+    provider: Literal["openai"] = "openai"
+    command: str = "tunnel-client"
+    health_host: str = "127.0.0.1"
+    health_port: int = 8091
+    mcp_server_url: str | None = None
+    connector_url: str = "https://chatgpt.com/#settings/Connectors"
+    tunnels_page_url: str = "https://platform.openai.com/settings/organization/tunnels"
+    api_keys_page_url: str = "https://platform.openai.com/settings/organization/api-keys"
+    ready_timeout_seconds: int = 30
+    binary_version: str = "0.0.18"
+
+    @field_validator("health_host")
+    @classmethod
+    def require_loopback(cls, value: str) -> str:
+        if value not in {"127.0.0.1", "localhost"}:
+            raise ValueError("tunnel.health_host must stay on loopback")
+        return value
+
+    @field_validator("health_port")
+    @classmethod
+    def validate_health_port(cls, value: int) -> int:
+        if not 1024 <= value <= 65535:
+            raise ValueError("tunnel.health_port must be between 1024 and 65535")
+        return value
+
+    @field_validator("ready_timeout_seconds")
+    @classmethod
+    def validate_ready_timeout(cls, value: int) -> int:
+        if not 5 <= value <= 120:
+            raise ValueError("tunnel.ready_timeout_seconds must be between 5 and 120")
+        return value
+
+    @field_validator("binary_version")
+    @classmethod
+    def validate_binary_version(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("tunnel.binary_version must not be empty")
+        return value.strip()
 
 
 class RuntimeConfig(BaseModel):
@@ -124,7 +164,7 @@ class Settings(BaseModel):
     server: ServerConfig
     mcp: McpConfig
     garmin: GarminConfig
-    cloudflare: CloudflareConfig
+    tunnel: OpenAITunnelConfig
     runtime: RuntimeConfig
     logs: LogsConfig
     security: SecurityConfig

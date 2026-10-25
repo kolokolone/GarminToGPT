@@ -7,6 +7,9 @@ import type {
   McpLocalStatus,
   TestDefinition,
   TestResult,
+  TunnelBinaryResult,
+  TunnelConfigResult,
+  TunnelConfigStatus,
   TunnelStatus,
 } from "./types";
 
@@ -59,11 +62,22 @@ export const api = {
   stopMcp: () => request<McpLocalStatus>("/api/mcp/stop", { method: "POST" }),
   restartMcp: () => request<McpLocalStatus>("/api/mcp/restart", { method: "POST" }),
   tunnelStatus: () => request<TunnelStatus>("/api/tunnel/status"),
+  tunnelConfig: () => request<TunnelConfigStatus>("/api/tunnel/config"),
+  saveTunnelConfig: (payload: { tunnel_id: string; api_key: string }) =>
+    request<TunnelConfigResult>("/api/tunnel/config", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  removeTunnelConfig: () =>
+    request<TunnelConfigResult>("/api/tunnel/config", {
+      method: "DELETE",
+      body: JSON.stringify({ confirm: true }),
+    }),
+  installTunnelClient: () =>
+    request<TunnelBinaryResult>("/api/tunnel/install", { method: "POST" }),
   startTunnel: () => request<ActionResult>("/api/tunnel/start", { method: "POST" }),
   stopTunnel: () => request<ActionResult>("/api/tunnel/stop", { method: "POST" }),
-  pauseTunnel: () => request<ActionResult>("/api/tunnel/pause", { method: "POST" }),
-  resumeTunnel: () => request<ActionResult>("/api/tunnel/resume", { method: "POST" }),
-  regenerateTunnel: () => request<ActionResult>("/api/tunnel/regenerate", { method: "POST" }),
+  restartTunnel: () => request<ActionResult>("/api/tunnel/restart", { method: "POST" }),
   logs: (service: string) => request<LogResult>(`/api/logs/${service}`),
   tests: () => request<{ tests: TestDefinition[] }>("/api/tests"),
   runTest: (id: string) => request<TestResult>(`/api/tests/${id}/run`, { method: "POST" }),

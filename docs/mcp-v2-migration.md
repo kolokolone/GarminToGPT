@@ -1,3 +1,5 @@
+> Note v1.1 : le tunnel Cloudflare est remplacé par `openai/tunnel-client` ; les mentions de Cloudflare ci-dessous sont historiques.
+
 > Document historique : la v1.0 utilise `garmin-personal-mcp` et la Personal API officielle. Ce guide ne décrit plus le flux par défaut.
 
 # Préparation de la migration MCP Python SDK v1 vers v2
