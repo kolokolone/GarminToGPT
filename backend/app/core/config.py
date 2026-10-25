@@ -11,7 +11,7 @@ from app.core.paths import project_root, resolve_project_path
 
 class AppConfig(BaseModel):
     name: str = "GarminToGPT"
-    version: str = "0.4.12"
+    version: str = "1.0.0"
     environment: str = "local"
 
 
@@ -45,14 +45,30 @@ class McpConfig(BaseModel):
 
 
 class GarminConfig(BaseModel):
-    auth_command: list[str]
-    verify_command: list[str]
-    token_dir: str
+    """Official Garmin Connect Personal API settings.
 
-    @property
-    def token_path(self) -> Path:
-        expanded = os.path.expandvars(self.token_dir)
-        return Path(expanded).expanduser()
+    Key and token cache paths deliberately follow Garmin's own client
+    (``~/.config/garmin/...``) so the backend and the MCP server share them.
+    Tests can override them with ``GARMINTOGPT_GARMIN_KEY_FILE`` and
+    ``GARMINTOGPT_GARMIN_TOKEN_CACHE``.
+    """
+
+    rotation_warning_days: int = 7
+    timeout_seconds: int = 30
+
+    @field_validator("rotation_warning_days")
+    @classmethod
+    def validate_warning_days(cls, value: int) -> int:
+        if not 1 <= value <= 90:
+            raise ValueError("garmin.rotation_warning_days must be between 1 and 90")
+        return value
+
+    @field_validator("timeout_seconds")
+    @classmethod
+    def validate_timeout(cls, value: int) -> int:
+        if not 5 <= value <= 120:
+            raise ValueError("garmin.timeout_seconds must be between 5 and 120")
+        return value
 
 
 class CloudflareConfig(BaseModel):

@@ -549,6 +549,13 @@ button.danger-lg:hover { background: #9e2b2b; }
   border-radius: var(--card-radius-sm);
   font-size: 0.85rem;
 }
+.success-box {
+  border-left: 4px solid var(--green);
+  background: var(--green-light);
+  padding: var(--space-3);
+  border-radius: var(--card-radius-sm);
+  font-size: 0.85rem;
+}
 
 /* ═══ Form ═══ */
 .form-grid {

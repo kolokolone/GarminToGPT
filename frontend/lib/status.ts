@@ -7,9 +7,12 @@ import type {
   McpLocalState,
   TunnelState,
   GlobalState,
-  GarminState,
   McpState,
 } from "./types";
+
+export function isGarminReady(garmin: GarminAuthStatus): boolean {
+  return garmin.configured && (garmin.state === "valid" || garmin.state === "expiring_soon");
+}
 
 /* ─── Bridge-level aggregation ─── */
 
@@ -39,7 +42,7 @@ export function computeBridgeInfo(
   const tunnelStopped = tunnel.state === "stopped" || tunnel.state === "paused" || tunnel.state === "expired";
   const tunnelError = tunnel.state === "error";
 
-  const garminOk = garmin.token_found && garmin.token_valid;
+  const garminOk = isGarminReady(garmin);
 
   // Error takes priority
   if (globalState === "error" || mcpError || tunnelError) {
@@ -109,7 +112,7 @@ export function computeStepperSteps(
   mcpLocal: McpLocalStatus | null,
   tunnel: TunnelStatus,
 ): StepInfo[] {
-  const garminOk = garmin.token_found && garmin.token_valid;
+  const garminOk = isGarminReady(garmin);
   const mcpRunning = mcpLocal?.status === "running";
   const mcpStarting = mcpLocal?.status === "starting" || mcpLocal?.status === "stopping";
   const mcpError = mcpLocal?.status === "error";
@@ -124,8 +127,13 @@ export function computeStepperSteps(
 
   // Step 1: Garmin
   const step1: StepInfo = garminOk
-    ? { key: "garmin", label: "Garmin connecté", sublabel: "Connexion à Garmin OK", cssClass: "completed" }
-    : { key: "garmin", label: "Garmin connecté", sublabel: "Connexion à vérifier", cssClass: garmin.token_found ? "degraded" : "" };
+    ? { key: "garmin", label: "Garmin connecté", sublabel: "Clé API Garmin valide", cssClass: "completed" }
+    : {
+        key: "garmin",
+        label: "Garmin connecté",
+        sublabel: garmin.configured ? "Clé API à vérifier" : "Aucune clé API",
+        cssClass: garmin.configured ? "degraded" : "",
+      };
 
   // Step 2: MCP local
   const step2: StepInfo = mcpRunning
@@ -287,16 +295,20 @@ export function getMcpLocalTechInfo(mcpLocal: McpLocalStatus | null): TechCardIn
 }
 
 export function getGarminTechInfo(garmin: GarminAuthStatus): TechCardInfo {
-  if (garmin.token_found && garmin.token_valid) {
-    return { iconClass: "green", iconLabel: "●", badgeLabel: "CONNECTÉ", badgeClass: "badge-connected", summary: "Connexion à Garmin établie et valide." };
+  switch (garmin.state) {
+    case "valid":
+      return { iconClass: "green", iconLabel: "●", badgeLabel: "VALIDE", badgeClass: "badge-connected", summary: "Clé API Garmin valide, accès Garmin Connect opérationnel." };
+    case "expiring_soon":
+      return { iconClass: "orange", iconLabel: "!", badgeLabel: "EXPIRE BIENTÔT", badgeClass: "badge-degraded", summary: garmin.message };
+    case "configured":
+      return { iconClass: "blue", iconLabel: "◐", badgeLabel: "CONFIGURÉE", badgeClass: "badge-starting", summary: "Clé API enregistrée, vérification recommandée." };
+    case "expired":
+      return { iconClass: "red", iconLabel: "✕", badgeLabel: "EXPIRÉE", badgeClass: "badge-error", summary: garmin.message };
+    case "error":
+      return { iconClass: "red", iconLabel: "✕", badgeLabel: "ERREUR", badgeClass: "badge-error", summary: garmin.message };
+    default:
+      return { iconClass: "gray", iconLabel: "○", badgeLabel: "NON CONFIGURÉE", badgeClass: "badge-off", summary: "Ajoute une clé API Garmin dans /connexion." };
   }
-  if (!garmin.token_found) {
-    return { iconClass: "gray", iconLabel: "○", badgeLabel: "NON CONNECTÉ", badgeClass: "badge-off", summary: "Connexion Garmin à vérifier." };
-  }
-  if (garmin.state === "auth_invalid" || garmin.state === "reauth_required") {
-    return { iconClass: "orange", iconLabel: "!", badgeLabel: "À VÉRIFIER", badgeClass: "badge-degraded", summary: "La connexion Garmin nécessite une nouvelle authentification." };
-  }
-  return { iconClass: "red", iconLabel: "✕", badgeLabel: "ERREUR", badgeClass: "badge-error", summary: "La connexion Garmin nécessite une nouvelle authentification." };
 }
 
 export function getTunnelTechInfo(tunnel: TunnelStatus): TechCardInfo {

@@ -24,8 +24,8 @@ COPY config ./config
 COPY --from=frontend-build /src/frontend/out ./frontend/out
 
 RUN useradd --create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /app/logs /app/runtime/pids /app/data/garmin /home/app/.garminconnect \
-    && chown -R app:app /app /home/app/.garminconnect
+    && mkdir -p /app/logs /app/runtime/pids /home/app/.config/garmin \
+    && chown -R app:app /app /home/app/.config
 
 USER app
 ENV GARMINTOGPT_ENV=local

@@ -14,7 +14,7 @@ from app.utils.ports import is_port_open
 from app.utils.redact import redact_text
 from app.utils.time import utc_now_iso
 
-_MCP_PROXY_WANTED = re.compile(r"mcp-proxy.*Taxuspt/garmin_mcp", re.IGNORECASE)
+_MCP_PROXY_WANTED = re.compile(r"mcp-proxy.*garmin-personal-mcp", re.IGNORECASE)
 
 
 class ProcessManager:
@@ -63,7 +63,7 @@ class ProcessManager:
             )
         if port and is_port_open("127.0.0.1", port):
             # V1-style detection: vérifier si le processus occupant le port est
-            # un mcp-proxy compatible avec Taxuspt/garmin_mcp
+            # un mcp-proxy compatible avec garmin-personal-mcp
             if name == "mcp" and self._is_compatible_mcp_proxy(port):
                 return ServiceActionResult(
                     ok=True,
@@ -181,7 +181,7 @@ class ProcessManager:
 
     def _is_compatible_mcp_proxy(self, port: int) -> bool:
         """V1-style detection: vérifie si le processus sur le port est
-        un mcp-proxy compatible avec Taxuspt/garmin_mcp."""
+        un mcp-proxy compatible avec garmin-personal-mcp."""
         import logging
         logger = logging.getLogger("GarminToGPT.process_manager")
 
@@ -227,7 +227,7 @@ class ProcessManager:
             cmdline = result2.stdout
             logger.info("Port %d occupé par PID %d – cmdline: %s", port, pid, cmdline[:300])
 
-            # Vérification: mcp-proxy et Taxuspt/garmin_mcp
+            # Vérification: mcp-proxy et garmin-personal-mcp
             if _MCP_PROXY_WANTED.search(cmdline):
                 logger.info(
                     "Port %d – mcp-proxy compatible détecté (PID %d), réutilisation.",

@@ -1,3 +1,5 @@
+> Document historique : la v1.0 utilise `garmin-personal-mcp` et la Personal API officielle. Ce guide ne décrit plus le flux par défaut.
+
 # Préparation de la migration MCP Python SDK v1 vers v2
 
 GarminToGPT reste actuellement sur le SDK MCP v1 avec les contraintes suivantes :

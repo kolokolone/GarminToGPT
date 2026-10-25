@@ -4,9 +4,21 @@ Priorité : sécurité, robustesse, diagnostic, simplicité.
 
 ## Secrets
 
-GarminToGPT ne doit jamais stocker de mot de passe Garmin. Les commandes officielles `garmin-mcp-auth` et `garmin-mcp-auth --verify` sont utilisées comme source de vérité.
+GarminToGPT ne stocke aucun mot de passe Garmin. La connexion utilise la clé
+Personal API officielle, échangée contre un jeton de 24 h par
+`garmin-connect-personal-api-python`.
 
-Les fichiers suivants sont ignorés : `.env`, logs, runtime, data, `.garminconnect`, tokens, secrets et mots de passe.
+- La clé est stockée dans `~/.config/garmin/connect-personal-api-key` avec des
+  permissions restreintes, ou fournie par `GARMIN_PERSONAL_API_KEY`.
+- Le cache de jeton officiel est dans
+  `~/.config/garmin/connect-personal-api-bearer-token.json`.
+- La clé et le jeton ne sont jamais renvoyés par l'API de statut, jamais
+  journalisés, et les logs passent par une redaction qui couvre `GCDC_...`,
+  les JWT et les en-têtes `ApiKey`/`Bearer`.
+- `garmin.env` est ignoré par Git. Ne versionne jamais une clé réelle.
+
+Les fichiers suivants sont ignorés : `.env`, `garmin.env`, logs, runtime, data,
+tokens, secrets et mots de passe.
 
 ## Tunnel Cloudflare
 

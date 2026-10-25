@@ -14,7 +14,7 @@ function Require-Command($Name) {
 Require-Command "uv"
 Require-Command "npm"
 
-$Backend = Start-Process -FilePath "uv" -ArgumentList @("run", "uvicorn", "app.main:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8000", "--reload") -WorkingDirectory $Root -PassThru
+$Backend = Start-Process -FilePath "uv" -ArgumentList @("run", "python", "-m", "uvicorn", "app.main:app", "--app-dir", "backend", "--host", "127.0.0.1", "--port", "8000", "--reload") -WorkingDirectory $Root -PassThru
 Set-Content -LiteralPath (Join-Path $Runtime "backend.pid") -Value $Backend.Id -Encoding UTF8
 
 $Frontend = Start-Process -FilePath "npm" -ArgumentList @("--prefix", "frontend", "run", "dev") -WorkingDirectory $Root -PassThru

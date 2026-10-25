@@ -78,7 +78,7 @@ echo Le backend controle ensuite MCP et Cloudflare depuis l'UI.
 echo Appuie sur Ctrl+C pour arreter GarminToGPT.
 echo.
 
-uv run uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+uv run python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 set "EXIT_CODE=%ERRORLEVEL%"
 echo.
 if "%EXIT_CODE%"=="-1" (

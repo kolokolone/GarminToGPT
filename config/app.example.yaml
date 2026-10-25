@@ -1,6 +1,6 @@
 app:
   name: GarminToGPT
-  version: 0.4.12
+  version: 1.0.0
   environment: local
 
 server:
@@ -17,11 +17,9 @@ mcp:
     - uvx
     - --python
     - "3.12"
-    - --with
-    - "mcp>=1.28.1,<2"
     - --from
-    - git+https://github.com/Taxuspt/garmin_mcp
-    - garmin-mcp
+    - "garmin-personal-mcp==0.1.1"
+    - garmin-personal-mcp
   proxy_command:
     - uvx
     - --python
@@ -35,37 +33,18 @@ mcp:
     - 127.0.0.1
     - --port
     - "8080"
+    - --pass-environment
     - --
     - uvx
     - --python
     - "3.12"
-    - --with
-    - "mcp>=1.28.1,<2"
     - --from
-    - git+https://github.com/Taxuspt/garmin_mcp
-    - garmin-mcp
+    - "garmin-personal-mcp==0.1.1"
+    - garmin-personal-mcp
 
 garmin:
-  auth_command:
-    - uvx
-    - --python
-    - "3.12"
-    - --with
-    - "mcp>=1.28.1,<2"
-    - --from
-    - git+https://github.com/Taxuspt/garmin_mcp
-    - garmin-mcp-auth
-  verify_command:
-    - uvx
-    - --python
-    - "3.12"
-    - --with
-    - "mcp>=1.28.1,<2"
-    - --from
-    - git+https://github.com/Taxuspt/garmin_mcp
-    - garmin-mcp-auth
-    - --verify
-  token_dir: "%USERPROFILE%\\.garminconnect"
+  rotation_warning_days: 7
+  timeout_seconds: 30
 
 cloudflare:
   mode: quick

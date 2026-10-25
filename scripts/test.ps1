@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 
 uv run ruff check backend
-uv run pytest
+uv run python -m pytest
 npm --prefix (Join-Path $Root "frontend") install
 npm --prefix (Join-Path $Root "frontend") run typecheck
 npm --prefix (Join-Path $Root "frontend") test

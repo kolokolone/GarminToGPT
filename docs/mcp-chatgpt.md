@@ -1,6 +1,6 @@
 # ChatGPT MCP Connector
 
-1. Authentifie Garmin via `/connexion`.
+1. Enregistre une clé Personal API Garmin via `/connexion` et vérifie-la.
 2. Démarre le service local MCP.
 3. Démarre le tunnel Cloudflare.
 4. Copie l’URL affichée : `https://xxxx.trycloudflare.com/mcp`.

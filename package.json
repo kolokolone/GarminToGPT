@@ -1,10 +1,10 @@
 {
   "name": "GarminToGPT-workspace",
   "private": true,
-  "version": "0.4.12",
+  "version": "1.0.0",
   "scripts": {
-    "backend:dev": "uv run uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --reload",
-    "backend:test": "uv run pytest",
+    "backend:dev": "uv run python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000 --reload",
+    "backend:test": "uv run python -m pytest",
     "backend:lint": "uv run ruff check backend",
     "frontend:dev": "npm --prefix frontend run dev",
     "frontend:build": "npm --prefix frontend run build",

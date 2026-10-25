@@ -18,7 +18,7 @@ services:
     volumes:
       - garmintogpt_logs:/app/logs
       - garmintogpt_runtime:/app/runtime
-      - garmintogpt_garmin:/home/app/.garminconnect
+      - garmintogpt_garmin:/home/app/.config/garmin
       - garmintogpt_cloudflared:/home/app/.cloudflared
 
     healthcheck:

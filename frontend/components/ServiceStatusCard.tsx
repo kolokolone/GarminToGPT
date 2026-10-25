@@ -104,20 +104,34 @@ function GarminTechContent({ data, onLogs }: { data: GarminAuthStatus; onLogs?: 
   const info = getGarminTechInfo(data);
   return (
     <>
-      <TechCardHeader title="Garmin MCP" {...info} />
+      <TechCardHeader title="Garmin API" {...info} />
       <p className="tech-card-summary">{info.summary}</p>
       <div className="details-grid">
         <div className="details-item">
+          <span className="details-label">Clé API</span>
+          <span className="details-value">{data.key.hint ?? "absente"}</span>
+        </div>
+        <div className="details-item">
+          <span className="details-label">Source</span>
+          <span className="details-value">
+            {data.key.source === "env" ? "environnement" : data.key.source === "file" ? "fichier" : "-"}
+          </span>
+        </div>
+        <div className="details-item">
           <span className="details-label">Token</span>
-          <span className="details-value">{data.token_found ? "détecté" : "absent"}</span>
+          <span className="details-value">{data.token_valid ? "valide" : "à renouveler"}</span>
         </div>
         <div className="details-item">
-          <span className="details-label">Validité</span>
-          <span className="details-value">{data.token_valid ? "valide" : "à vérifier"}</span>
+          <span className="details-label">Dernière vérification</span>
+          <span className="details-value">{formatDate(data.last_verified_at)}</span>
         </div>
         <div className="details-item">
-          <span className="details-label">Dernière connexion</span>
-          <span className="details-value">{formatDate(data.last_successful_auth)}</span>
+          <span className="details-label">Rotation</span>
+          <span className="details-value">
+            {data.rotation.days_remaining === null
+              ? "date inconnue"
+              : `${data.rotation.days_remaining} jour(s)`}
+          </span>
         </div>
         <div className="details-item">
           <span className="details-label">Message</span>

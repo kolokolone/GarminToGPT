@@ -29,7 +29,7 @@ def create_app() -> FastAPI:
             f"http://127.0.0.1:{settings.server.backend_port}",
         ],
         allow_credentials=False,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["*"],
     )
     app.include_router(routes_status.router)

@@ -80,16 +80,19 @@ class TestService:
             "check_garmin_token_exists": (
                 TestDefinition(
                     id="check_garmin_token_exists",
-                    name="Token Garmin détecté",
-                    description="Cherche les tokens Garmin locaux.",
+                    name="Clé API Garmin détectée",
+                    description=(
+                        "Cherche une clé Personal API dans l'environnement "
+                        "ou le fichier officiel."
+                    ),
                 ),
-                self._check_token,
+                self._check_api_key,
             ),
             "check_garmin_auth_valid": (
                 TestDefinition(
                     id="check_garmin_auth_valid",
-                    name="Auth Garmin valide",
-                    description="Lance la vérification Garmin officielle.",
+                    name="Connexion Garmin valide",
+                    description="Échange la clé API et lit le profil Garmin.",
                 ),
                 self._check_auth,
             ),
@@ -196,17 +199,24 @@ class TestService:
             )
         return True, "Dépendances minimales disponibles.", None
 
-    def _check_token(self) -> tuple[bool, str, str | None]:
-        if self.garmin.has_garmin_token():
-            return True, "Token Garmin détecté.", None
-        return False, "Aucun token Garmin détecté.", "Lance l'authentification assistée."
+    def _check_api_key(self) -> tuple[bool, str, str | None]:
+        status = self.garmin.status()
+        if not status.configured:
+            return (
+                False,
+                "Aucune clé API Garmin détectée.",
+                "Ouvre /connexion et colle ta clé Personal API.",
+            )
+        source = "variable d'environnement" if status.key.source == "env" else "fichier officiel"
+        return True, f"Clé API Garmin détectée ({source}).", None
 
     def _check_auth(self) -> tuple[bool, str, str | None]:
-        status = self.garmin.verify_garmin_auth()
+        status = self.garmin.verify()
+        ok = status.state in {"valid", "expiring_soon"}
         return (
-            status.token_valid,
+            ok,
             status.message,
-            "Réauthentifie Garmin." if not status.token_valid else None,
+            "Vérifie la clé dans /connexion." if not ok else None,
         )
 
     def _check_mcp_process(self) -> tuple[bool, str, str | None]:
@@ -303,7 +313,7 @@ class TestService:
     def _check_smoke(self) -> tuple[bool, str, str | None]:
         config_ok, _, _ = self._check_config()
         dependency_ok, _, _ = self._check_dependencies()
-        token_ok, _, _ = self._check_token()
+        token_ok, _, _ = self._check_api_key()
         mcp_ok, _, _ = self._check_mcp_port()
         url_ok, _, _ = self._check_chatgpt_url()
         ok = config_ok and dependency_ok and token_ok and mcp_ok and url_ok

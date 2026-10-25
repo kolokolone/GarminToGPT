@@ -5,7 +5,6 @@ import type {
   GlobalStatus,
   LogResult,
   McpLocalStatus,
-  McpStatus,
   TestDefinition,
   TestResult,
   TunnelStatus,
@@ -20,7 +19,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     cache: "no-store",
   });
   if (!response.ok) {
-    throw new Error(`Erreur API ${response.status}: ${await response.text()}`);
+    const body = await response.text();
+    let message = body;
+    try {
+      const parsed = JSON.parse(body) as { detail?: unknown; message?: unknown };
+      if (typeof parsed.detail === "string") message = parsed.detail;
+      else if (typeof parsed.message === "string") message = parsed.message;
+    } catch {
+      // Keep the raw body when Garmin/API did not return JSON.
+    }
+    throw new Error(message || `Erreur API ${response.status}`);
   }
   return response.json() as Promise<T>;
 }
@@ -30,11 +38,22 @@ export const api = {
   stopAccess: () => request<GlobalStatus>("/api/access/stop", { method: "POST" }),
   status: () => request<GlobalStatus>("/api/status"),
   authStatus: () => request<GarminAuthStatus>("/api/auth/status"),
-  login: (payload: { email?: string; password?: string; otp?: string }) =>
-    request<GarminAuthResult>("/api/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+  configureKey: (payload: { api_key: string; expires_on?: string | null }) =>
+    request<GarminAuthResult>("/api/auth/key", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateKeyExpiration: (expires_on: string | null) =>
+    request<GarminAuthStatus>("/api/auth/key", {
+      method: "PATCH",
+      body: JSON.stringify({ expires_on }),
+    }),
+  removeKey: () =>
+    request<GarminAuthResult>("/api/auth/key", {
+      method: "DELETE",
+      body: JSON.stringify({ confirm: true }),
+    }),
   verifyAuth: () => request<GarminAuthStatus>("/api/auth/verify", { method: "POST" }),
-  reauthenticate: () => request<GarminAuthResult>("/api/auth/reauthenticate", { method: "POST" }),
-  disconnect: () => request<{ ok: boolean; message: string }>("/api/auth/disconnect", { method: "POST", body: JSON.stringify({ confirm: true }) }),
   mcpLocalStatus: () => request<McpLocalStatus>("/api/mcp/status"),
   startMcp: () => request<McpLocalStatus>("/api/mcp/start", { method: "POST" }),
   stopMcp: () => request<McpLocalStatus>("/api/mcp/stop", { method: "POST" }),

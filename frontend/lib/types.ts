@@ -1,16 +1,17 @@
 export type GlobalState = "not_configured" | "needs_auth" | "ready" | "degraded" | "error";
-export type GarminState =
-  | "unknown"
-  | "no_token"
-  | "token_found"
-  | "connected"
-  | "auth_invalid"
-  | "reauth_required"
+export type GarminAuthState =
+  | "not_configured"
+  | "configured"
+  | "valid"
+  | "expiring_soon"
+  | "expired"
   | "error";
+export type KeySource = "file" | "env";
+export type RotationSource = "declared" | "observed" | "unknown";
 export type McpState = "stopped" | "starting" | "running" | "unhealthy" | "error";
 export type McpLocalState = "running" | "stopped" | "starting" | "stopping" | "error";
 export type TunnelState = "stopped" | "starting" | "running" | "paused" | "expired" | "error";
-export type BadgeState = GlobalState | GarminState | McpState | TunnelState | "success" | "failed" | "not_run" | "skipped" | McpLocalState;
+export type BadgeState = GlobalState | GarminAuthState | McpState | TunnelState | "success" | "failed" | "not_run" | "skipped" | McpLocalState;
 
 export interface ProcessStatus {
   status: McpState;
@@ -25,20 +26,38 @@ export interface HealthcheckResult {
   status_code: number | null;
 }
 
+export interface GarminKeyInfo {
+  source: KeySource | null;
+  hint: string | null;
+  fingerprint: string | null;
+}
+
+export interface GarminRotationInfo {
+  expires_on: string | null;
+  days_remaining: number | null;
+  source: RotationSource;
+  warning: boolean;
+}
+
 export interface GarminAuthStatus {
-  state: GarminState;
-  token_found: boolean;
+  state: GarminAuthState;
+  configured: boolean;
+  key: GarminKeyInfo;
+  token_present: boolean;
   token_valid: boolean;
-  last_successful_auth: string | null;
+  token_expires_at: string | null;
+  token_scopes: string[];
+  rotation: GarminRotationInfo;
+  last_verified_at: string | null;
+  display_name: string | null;
   message: string;
+  error: string | null;
 }
 
 export interface GarminAuthResult {
   ok: boolean;
-  assisted: boolean;
-  needs_otp: boolean;
+  changed: boolean;
   message: string;
-  command: string[] | null;
   status: GarminAuthStatus;
 }
 

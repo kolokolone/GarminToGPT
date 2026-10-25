@@ -1,6 +1,8 @@
 .env
 .env.*
 !.env.example
+garmin.env
+garmin.env.*
 
 logs/*
 !logs/.gitkeep

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AppHeader } from "../components/AppHeader";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { LogsModal } from "../components/LogsModal";
@@ -10,6 +11,7 @@ import {
   computeAccessInfo,
   computeBridgeInfo,
   computeStepperSteps,
+  isGarminReady,
   isValidUrl,
 } from "../lib/status";
 import type {
@@ -30,6 +32,7 @@ const INITIAL_TUNNEL: TunnelStatus = {
 };
 
 export default function HomePage() {
+  const router = useRouter();
   const [status, setStatus] = useState<GlobalStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -37,7 +40,7 @@ export default function HomePage() {
   const [copied, setCopied] = useState(false);
   const [logsService, setLogsService] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogResult | null>(null);
-  const [confirm, setConfirm] = useState<null | "stopTunnel" | "disconnect" | "regenerate">(null);
+  const [confirm, setConfirm] = useState<null | "stopTunnel" | "regenerate">(null);
   const [mcpLocal, setMcpLocal] = useState<McpLocalStatus | null>(null);
   const [mcpLoading, setMcpLoading] = useState(false);
 
@@ -48,8 +51,7 @@ export default function HomePage() {
       const s = await api.status();
       setStatus(s);
       setError(null);
-      // Efface la notification si Garmin est maintenant connecté
-      if (s.garmin.token_found && s.garmin.token_valid) {
+      if (isGarminReady(s.garmin)) {
         setNotice(null);
       }
     } catch (err) {
@@ -69,6 +71,14 @@ export default function HomePage() {
     void refresh();
     void refreshMcp();
   }, [refresh, refreshMcp]);
+
+  // No key means the bridge cannot work: show the message briefly, then
+  // send the user to the key management page.
+  useEffect(() => {
+    if (!status || status.garmin.configured) return;
+    const timer = setTimeout(() => router.replace("/connexion"), 2500);
+    return () => clearTimeout(timer);
+  }, [status, router]);
 
   // Tunnel polling 3s (max 60s) while tunnel is starting
   const tunnelState = status?.tunnel.state ?? "stopped";
@@ -129,18 +139,20 @@ export default function HomePage() {
       const result = await api.startAccess();
       setStatus(result);
       // Notification métier selon l'état Garmin
-      if (result.state === "needs_auth" || result.garmin.state === "no_token") {
+      if (result.state === "needs_auth" || !result.garmin.configured) {
         setNotice(
-          "Compte Garmin non connecté. Le service Garmin MCP ne peut pas démarrer " +
-          "car aucun token Garmin n'a été trouvé. " +
-          "Lance l'authentification Garmin une première fois dans le conteneur, puis réessaie."
+          "Aucune clé API Garmin. Le pont MCP ne peut pas démarrer. " +
+          "Ouvre /connexion pour connecter ton compte."
         );
-      } else if (
-        result.garmin.state === "auth_invalid" ||
-        result.garmin.state === "reauth_required"
-      ) {
+      } else if (result.garmin.state === "expired") {
         setNotice(
-          "Authentification Garmin à corriger. Le token Garmin existe mais n'est plus valide."
+          "La clé API Garmin est expirée ou invalide. Crée une nouvelle clé dans " +
+          "Garmin Connect puis mets-la à jour dans /connexion."
+        );
+      } else if (result.garmin.state === "error") {
+        setNotice(
+          "La vérification de la clé API Garmin a échoué. Vérifie ta connexion réseau " +
+          "puis réessaie depuis /connexion."
         );
       } else {
         setNotice(null);
@@ -297,7 +309,13 @@ export default function HomePage() {
       {/* Error banner */}
       {error ? <p className="error-box">{error}</p> : null}
 
-      {/* Notice métier (auth manquante, token invalide) */}
+      {/* Notice métier (clé absente, expirée ou erreur de vérification) */}
+      {!status.garmin.configured ? (
+        <p className="warning-box">
+          Aucune clé API Garmin configurée. Redirection vers{" "}
+          <a href="/connexion">/connexion</a> pour connecter ton compte…
+        </p>
+      ) : null}
       {notice ? <p className="warning-box">{notice}</p> : null}
 
       {/* ── 3. Access ChatGPT Card ── */}
@@ -436,16 +454,11 @@ export default function HomePage() {
       <ConfirmDialog
         open={confirm !== null}
         title="Confirmation requise"
-        message={
-          confirm === "disconnect"
-            ? "Voulez-vous vraiment vous déconnecter ? Les tokens Garmin locaux seront supprimés."
-            : "Cette action modifie l'état du tunnel Cloudflare public."
-        }
+        message="Cette action modifie l'état du tunnel Cloudflare public."
         confirmLabel="Confirmer"
         onCancel={() => setConfirm(null)}
         onConfirm={() => {
           if (confirm === "stopTunnel") void runAction(api.stopTunnel);
-          if (confirm === "disconnect") void runAction(api.disconnect);
           if (confirm === "regenerate") void runAction(api.regenerateTunnel);
         }}
       />

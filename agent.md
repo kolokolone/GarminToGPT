@@ -1,5 +1,8 @@
 # agent.md — Règles de travail pour l’agent OpenCode
 
+> **Mise à jour v1.0** : la connexion Garmin de ce document est remplacée par la Personal API officielle (`garmin-connect-personal-api-python`) et le serveur `garmin-personal-mcp`. Les règles de sécurité, de tests et d'UI restent valables. Voir `README.md` et `docs/architecture.md` pour le flux actuel.
+
+
 ## 1. Rôle de l’agent
 
 Tu es un agent de développement senior affecté au dépôt **GarminToGPT**.

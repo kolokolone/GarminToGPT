@@ -13,7 +13,7 @@ export function AppHeader({ version }: { version?: string }) {
       <div className="app-header-left">
         <p className="app-header-eyebrow">PONT MCP LOCAL</p>
         <h1 className="app-header-title">GarminToGPT</h1>
-        <p className="app-header-subtitle">Pont local entre Garmin Connect, garmin-mcp et ChatGPT.</p>
+        <p className="app-header-subtitle">Pont local entre Garmin Connect, la Personal API et ChatGPT.</p>
       </div>
       <nav className="app-header-nav" aria-label="Navigation principale">
         <Link href="/" className={isActive("/") ? "active" : ""}>Accueil</Link>

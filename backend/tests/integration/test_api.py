@@ -1,20 +1,112 @@
+"""HTTP contract tests for status, access gating, and key management.
+
+The Garmin client boundary is faked: these tests never touch the network or the
+real key file. The auth core's own behavior is covered by unit tests.
+"""
+
 import os
 from pathlib import Path
 
+import pytest
+from app.garmin_auth import (
+    ConfigureOutcome,
+    EnvKeyConflictError,
+    GarminAuthStatus,
+    GarminKeyInfo,
+    GarminRotationInfo,
+)
 from fastapi.testclient import TestClient
 
-
-def _create_token_file(config_path: Path, token_dir: Path) -> Path:
-    """Crée un fichier factice pour simuler la présence d'un token Garmin."""
-    token_dir.mkdir(parents=True, exist_ok=True)
-    token_file = token_dir / "garmin_token.txt"
-    token_file.write_text("dummy-token", encoding="utf-8")
-    return token_file
+KEY = "GCDC_" + "a" * 120
 
 
-def test_api_status_and_tests_endpoints(tmp_path, monkeypatch) -> None:
+def _status(
+    state: str = "not_configured",
+    *,
+    configured: bool = False,
+    message: str | None = None,
+) -> GarminAuthStatus:
+    ready = configured and state in {"valid", "expiring_soon"}
+    return GarminAuthStatus(
+        state=state,  # type: ignore[arg-type]
+        configured=configured,
+        key=GarminKeyInfo(
+            source="file" if configured else None,
+            hint="••••abcd" if configured else None,
+            fingerprint="0123456789ab" if configured else None,
+        ),
+        token_present=configured,
+        token_valid=ready,
+        token_expires_at="2026-10-26T12:00:00+00:00" if configured else None,
+        token_scopes=["CONNECT_READ"] if configured else [],
+        rotation=(
+            GarminRotationInfo(
+                expires_on="2026-11-24",
+                days_remaining=30,
+                source="declared",
+                warning=False,
+            )
+            if configured
+            else GarminRotationInfo()
+        ),
+        last_verified_at="2026-10-25T12:00:00+00:00" if configured else None,
+        display_name="Test Runner" if configured else None,
+        message=message
+        or ("Clé API valide." if configured else "Aucune clé API Garmin configurée."),
+    )
+
+
+class FakeGarminAuth:
+    def __init__(self) -> None:
+        self.current = _status()
+        self.error: Exception | None = None
+        self.configure_calls: list[tuple[str, str | None]] = []
+        self.verify_calls = 0
+        self.remove_calls = 0
+        self.update_calls: list[str | None] = []
+
+    def status(self) -> GarminAuthStatus:
+        return self.current
+
+    def verify(self) -> GarminAuthStatus:
+        self.verify_calls += 1
+        return self.current
+
+    def configure(self, api_key: str, expires_on: str | None = None) -> ConfigureOutcome:
+        if self.error is not None:
+            raise self.error
+        self.configure_calls.append((api_key, expires_on))
+        self.current = _status("valid", configured=True)
+        return ConfigureOutcome(changed=True, status=self.current)
+
+    def update_expiration(self, expires_on: str | None) -> GarminAuthStatus:
+        self.update_calls.append(expires_on)
+        rotation = (
+            GarminRotationInfo(
+                expires_on=expires_on,
+                days_remaining=37 if expires_on else None,
+                source="declared" if expires_on else "unknown",
+                warning=False,
+            )
+            if expires_on
+            else GarminRotationInfo()
+        )
+        self.current = self.current.model_copy(update={"rotation": rotation})
+        return self.current
+
+    def remove(self) -> GarminAuthStatus:
+        self.remove_calls += 1
+        self.current = _status()
+        return self.current
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
     config = _write_config(tmp_path)
     monkeypatch.setenv("GARMINTOGPT_CONFIG", str(config))
+    monkeypatch.setenv("GARMINTOGPT_GARMIN_KEY_FILE", str(tmp_path / "api-key"))
+    monkeypatch.setenv("GARMINTOGPT_GARMIN_TOKEN_CACHE", str(tmp_path / "cache.json"))
+    monkeypatch.delenv("GARMIN_PERSONAL_API_KEY", raising=False)
 
     from app.core.config import get_settings
     from app.services.container import get_container
@@ -24,112 +116,137 @@ def test_api_status_and_tests_endpoints(tmp_path, monkeypatch) -> None:
 
     from app.main import create_app
 
-    client = TestClient(create_app())
-    status = client.get("/api/status")
-    tests = client.get("/api/tests")
+    app = create_app()
+    container = get_container()
+    fake = FakeGarminAuth()
+    container.garmin = fake  # type: ignore[assignment]
+    container.tests.garmin = fake  # type: ignore[assignment]
+
+    with TestClient(app) as test_client:
+        yield test_client, fake, container
+
+    get_settings.cache_clear()
+    get_container.cache_clear()
+
+
+def test_status_and_tests_endpoints_without_key(client) -> None:
+    test_client, fake, _ = client
+
+    status = test_client.get("/api/status")
+    tests = test_client.get("/api/tests")
 
     assert status.status_code == 200
     assert status.json()["state"] == "needs_auth"
+    assert status.json()["garmin"]["state"] == "not_configured"
+    assert status.json()["garmin"]["configured"] is False
     assert tests.status_code == 200
     assert len(tests.json()["tests"]) >= 14
 
-    # ── Access: sans token Garmin, le démarrage est bloqué ──
-
-    access = client.post("/api/access/start")
+    access = test_client.post("/api/access/start")
     assert access.status_code == 200
     data = access.json()
-    assert data["state"] == "needs_auth", (
-        f"Sans token, start_access doit retourner needs_auth, got {data['state']}"
-    )
-    assert data["garmin"]["state"] == "no_token"
-
-    # Vérifier que ni MCP ni tunnel n'ont été lancés
-    status2 = client.get("/api/status")
-    assert status2.json()["state"] == "needs_auth"
-    assert status2.json()["mcp"]["state"] == "stopped"
-    assert status2.json()["tunnel"]["state"] == "stopped"
+    assert data["state"] == "needs_auth"
+    assert data["garmin"]["state"] == "not_configured"
+    assert data["mcp"]["state"] == "stopped"
+    assert data["tunnel"]["state"] == "stopped"
+    assert fake.verify_calls == 1
 
 
-def test_access_start_with_invalid_garmin_token(tmp_path, monkeypatch) -> None:
-    """Avec un token Garmin invalide, start_access ne lance ni MCP ni tunnel."""
-    config = _write_config(tmp_path)
-    monkeypatch.setenv("GARMINTOGPT_CONFIG", str(config))
+def test_access_start_with_expired_key_does_not_start_bridge(client) -> None:
+    test_client, fake, _ = client
+    fake.current = _status("expired", configured=True, message="Clé API expirée.")
 
-    from app.core.config import get_settings
-    from app.models.auth import GarminAuthStatus
-    from app.services.container import get_container
-
-    get_settings.cache_clear()
-    get_container.cache_clear()
-
-    # Créer un fichier token pour que has_garmin_token() retourne True
-    token_dir = tmp_path / "tokens"
-    token_dir.mkdir(parents=True, exist_ok=True)
-    (token_dir / "token.txt").write_text("dummy", encoding="utf-8")
-
-    # Patcher verify_garmin_auth pour simuler un token invalide
-    container = get_container()
-    monkeypatch.setattr(
-        container.garmin,
-        "verify_garmin_auth",
-        lambda: GarminAuthStatus(
-            state="auth_invalid",
-            token_found=True,
-            token_valid=False,
-            message="Token invalide (test).",
-        ),
-    )
-
-    from app.main import create_app
-
-    client = TestClient(create_app())
-
-    start = client.post("/api/access/start")
+    start = test_client.post("/api/access/start")
     assert start.status_code == 200
     data = start.json()
-    assert data["state"] == "degraded", (
-        f"Avec token invalide, start_access doit retourner degraded, got {data['state']}"
-    )
-    assert data["garmin"]["state"] == "auth_invalid"
-
-    # MCP et tunnel ne doivent pas avoir été lancés
+    assert data["state"] == "needs_auth"
+    assert data["garmin"]["state"] == "expired"
     assert data["mcp"]["state"] == "stopped"
     assert data["tunnel"]["state"] == "stopped"
 
-    # Le stop ne doit pas être affecté
-    stop = client.post("/api/access/stop")
+    stop = test_client.post("/api/access/stop")
     assert stop.status_code == 200
 
 
-def test_access_stop_unchanged(tmp_path, monkeypatch) -> None:
-    """Le comportement de stop_access est inchangé par le patch Garmin."""
-    config = _write_config(tmp_path)
-    monkeypatch.setenv("GARMINTOGPT_CONFIG", str(config))
+def test_configure_key_returns_secret_free_status(client) -> None:
+    test_client, fake, _ = client
 
-    from app.core.config import get_settings
-    from app.services.container import get_container
+    response = test_client.post(
+        "/api/auth/key",
+        json={"api_key": KEY, "expires_on": "2026-11-24"},
+    )
 
-    get_settings.cache_clear()
-    get_container.cache_clear()
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["changed"] is True
+    assert payload["status"]["state"] == "valid"
+    assert KEY not in response.text
+    assert fake.configure_calls == [(KEY, "2026-11-24")]
 
-    from app.main import create_app
 
-    client = TestClient(create_app())
+def test_configure_key_maps_environment_conflict_to_409(client) -> None:
+    test_client, fake, _ = client
+    fake.error = EnvKeyConflictError("La variable d'environnement est prioritaire.")
 
-    stop = client.post("/api/access/stop")
-    assert stop.status_code == 200
-    data = stop.json()
-    assert data["state"] == "needs_auth"  # toujours pas de token
+    response = test_client.post("/api/auth/key", json={"api_key": KEY})
+
+    assert response.status_code == 409
+    assert "prioritaire" in response.json()["detail"]
+
+
+def test_update_expiration_endpoint(client) -> None:
+    test_client, fake, _ = client
+    fake.current = _status("valid", configured=True)
+
+    response = test_client.patch("/api/auth/key", json={"expires_on": "2026-12-01"})
+
+    assert response.status_code == 200
+    assert response.json()["rotation"]["expires_on"] == "2026-12-01"
+    assert fake.update_calls == ["2026-12-01"]
+
+
+def test_delete_key_requires_confirmation(client) -> None:
+    test_client, fake, _ = client
+    fake.current = _status("valid", configured=True)
+
+    response = test_client.request(
+        "DELETE",
+        "/api/auth/key",
+        json={"confirm": False},
+    )
+
+    assert response.status_code == 400
+    assert fake.remove_calls == 0
+
+
+def test_delete_key_stops_bridge(client, monkeypatch) -> None:
+    test_client, fake, container = client
+    fake.current = _status("valid", configured=True)
+
+    calls: list[str] = []
+    monkeypatch.setattr(container.mcp, "stop_mcp_service", lambda: calls.append("mcp"))
+    monkeypatch.setattr(container.tunnel, "stop_tunnel", lambda: calls.append("tunnel"))
+
+    response = test_client.request(
+        "DELETE",
+        "/api/auth/key",
+        json={"confirm": True},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"]["state"] == "not_configured"
+    assert fake.remove_calls == 1
+    assert calls == ["mcp", "tunnel"]
 
 
 def _write_config(tmp_path: Path) -> Path:
-    token_dir = tmp_path / "tokens"
     runtime_dir = tmp_path / "runtime"
     logs_dir = tmp_path / "logs"
     content = f"""
 app:
   name: GarminToGPT
-  version: 0.4.12
+  version: 1.0.0
   environment: test
 server:
   host: 127.0.0.1
@@ -140,12 +257,11 @@ mcp:
   port: 18080
   endpoint: /mcp
   sse_endpoint: /sse
-  command: [uvx, garmin-mcp]
+  command: [uvx, garmin-personal-mcp]
   proxy_command: [uvx, mcp-proxy]
 garmin:
-  auth_command: [uvx, garmin-mcp-auth]
-  verify_command: [uvx, garmin-mcp-auth, --verify]
-  token_dir: "{token_dir}"
+  rotation_warning_days: 7
+  timeout_seconds: 5
 cloudflare:
   mode: quick
   local_url: http://127.0.0.1:18080

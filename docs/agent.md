@@ -1,5 +1,8 @@
 # GarminToGPT — Agent UI Guidelines
 
+> **Mise à jour v1.0** : la connexion Garmin de ce document est remplacée par la Personal API officielle (`garmin-connect-personal-api-python`) et le serveur `garmin-personal-mcp`. Les règles de sécurité, de tests et d'UI restent valables. Voir `README.md` et `docs/architecture.md` pour le flux actuel.
+
+
 Ce document définit les règles que l’agent de développement doit respecter lorsqu’il modifie l’interface de GarminToGPT.
 
 Il doit être lu avant toute modification frontend liée à l’UI, à l’UX, aux composants React, aux pages Next.js ou au CSS global.
