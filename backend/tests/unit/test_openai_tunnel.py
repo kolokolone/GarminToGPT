@@ -343,3 +343,18 @@ def test_binary_extract_creates_runtime_directory(tmp_path: Path) -> None:
 
     assert manager.auto_path.exists()
     assert manager.auto_path.read_bytes() == b"fake-binary"
+
+
+def test_store_persists_latest_value_across_instances(tmp_path: Path) -> None:
+    first = _store(tmp_path)
+    first.save(TUNNEL_ID, API_KEY)
+
+    reopened = _store(tmp_path)
+    loaded = reopened.load()
+    assert loaded.tunnel_id == TUNNEL_ID
+    assert loaded.api_key == API_KEY
+
+    first.save(OTHER_ID, "sk-other-runtime-key-123456")
+    latest = _store(tmp_path).load()
+    assert latest.tunnel_id == OTHER_ID
+    assert latest.api_key == "sk-other-runtime-key-123456"

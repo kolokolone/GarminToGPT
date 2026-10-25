@@ -325,3 +325,38 @@ def test_status_never_contains_the_token(tmp_path: Path) -> None:
     assert token not in payload
     assert KEY_A not in payload
     assert "access_token" not in payload
+
+
+def test_key_store_persists_latest_value_across_instances(tmp_path: Path) -> None:
+    path = tmp_path / "api-key"
+    first = KeyStore(path, env_var="TEST_GARMIN_KEY")
+    first.save(KEY_A)
+
+    reopened = KeyStore(path, env_var="TEST_GARMIN_KEY")
+    stored = reopened.load()
+    assert stored is not None
+    assert stored.value == KEY_A
+
+    first.save(KEY_B)
+    latest = KeyStore(path, env_var="TEST_GARMIN_KEY").load()
+    assert latest is not None
+    assert latest.value == KEY_B
+
+
+def test_status_after_restart_reads_persisted_key(tmp_path: Path) -> None:
+    core, _, _, cache_path = _core(tmp_path, FakeTransport())
+    core.configure(KEY_A)
+
+    restarted = GarminAuthCore(
+        key_store=KeyStore(tmp_path / "api-key", env_var="TEST_GARMIN_KEY"),
+        transport=FakeTransport(),
+        metadata=InMemoryMetadataStore(),
+        token_cache_path=cache_path,
+        base_url=BASE_URL,
+        rotation_warning_days=7,
+        now=lambda: FIXED_NOW,
+    )
+    status = restarted.status()
+
+    assert status.configured is True
+    assert status.key.hint == "••••" + KEY_A[-4:]

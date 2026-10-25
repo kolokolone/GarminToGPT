@@ -19,6 +19,18 @@ ni URL publique n’est créé.
 Une **admin key** (`OPENAI_ADMIN_KEY`) ne doit pas être utilisée pour le daemon :
 elle sert uniquement à créer, lister, modifier ou supprimer des tunnels.
 
+## Utilisation normale (Docker)
+
+```powershell
+docker compose up -d --build
+```
+
+Ouvre `http://127.0.0.1:8000/tunnel` et enregistre le `tunnel_id` et la clé API
+ChatGPT. Les volumes `garmintogpt_openai`, `garmintogpt_garmin` et
+`garmintogpt_runtime` conservent les clés et l’état entre les redémarrages.
+`docker compose down` conserve les volumes ; `docker compose down -v` les
+supprime (et efface donc les clés).
+
 ## Configuration dans l’application
 
 Ouvre `http://127.0.0.1:8000/tunnel`.
@@ -37,6 +49,11 @@ Ouvre `http://127.0.0.1:8000/tunnel`.
 - `CONTROL_PLANE_TUNNEL_ID` et `CONTROL_PLANE_API_KEY` (ou `OPENAI_API_KEY`)
   sont prioritaires sur les fichiers ; la page affiche alors la configuration
   comme non éditable.
+
+La dernière valeur enregistrée dans `/tunnel` est celle utilisée au redémarrage
+suivant. L’écriture est atomique et l’ancien cache de jeton est invalidé par
+l’empreinte de la clé. Il n’y a pas de SQLite : deux fichiers locaux suffisent,
+et ils restent compatibles avec les outils OpenAI.
 
 ## Démarrage et diagnostic
 
@@ -69,7 +86,8 @@ en local, puis Garmin Personal MCP fournit les outils.
 2. ChatGPT → Settings → Connectors.
 3. Choisir `Connection: Tunnel`.
 4. Sélectionner le tunnel ou coller le `tunnel_id`.
-5. Garder le client démarré : il reçoit les appels MCP et les transfère au proxy
+5. Pour l’authentification du connecteur, choisir **Sans authentification**.
+6. Garder le client démarré : il reçoit les appels MCP et les transfère au proxy
    local.
 
 Il n’y a **pas d’URL publique** à copier. Le tunnel est identifié par son

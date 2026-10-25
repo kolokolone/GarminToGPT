@@ -101,11 +101,15 @@ Le proxy MCP utilise `127.0.0.1:8080`. Arrête l’autre service ou modifie
 Le healthcheck du tunnel utilise `127.0.0.1:8091`. Arrête l’ancien client ou
 modifie `tunnel.health_port` dans `config/app.yaml`.
 
-## Docker
+## Docker et persistance des clés
 
-Les volumes `config`, `logs`, `runtime` et les volumes Garmin/OpenAI conservent
-la configuration, les logs, les PID, la clé Garmin et la configuration du
-tunnel. Le healthcheck `/ui` du tunnel est interne au conteneur (loopback) ;
+Les volumes `garmintogpt_garmin`, `garmintogpt_openai` et
+`garmintogpt_runtime` conservent les clés, le tunnel ID et l’état entre les
+redémarrages. `docker compose restart` et `docker compose up -d` ne les
+effacent pas. **`docker compose down -v` supprime les volumes et les clés** ;
+utilise `docker compose down` pour conserver les données.
+
+Le healthcheck `/ui` du tunnel est interne au conteneur (loopback) ;
 l’application lit `/readyz` depuis le backend.
 
 ## ChatGPT ne voit pas le connecteur

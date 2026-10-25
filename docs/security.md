@@ -46,6 +46,18 @@ Références :
 - Le client doit rester démarré pour les appels MCP de ChatGPT.
 - Ferme le tunnel quand tu n’en as plus besoin.
 
+## Persistance Docker
+
+Les volumes nommés conservent les secrets hors image :
+
+- `garmintogpt_garmin` : clé Garmin + cache de jeton ;
+- `garmintogpt_openai` : tunnel ID + clé API ChatGPT ;
+- `garmintogpt_runtime` : état, PID, binaire tunnel téléchargé.
+
+`docker compose restart` et `docker compose up -d` conservent les volumes.
+`docker compose down` les conserve aussi ; **`docker compose down -v` les
+supprime et efface les clés**.
+
 ## Fichiers ignorés
 
 `.env`, `garmin.env`, logs, runtime, data, clés, jetons, secrets et mots de

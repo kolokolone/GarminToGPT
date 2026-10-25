@@ -129,7 +129,7 @@ export default function ConnexionPage() {
 
   if (!auth) {
     return (
-      <main className="shell narrow">
+      <main className="shell">
         <AppHeader />
         <section className="card card-primary">
           <p className="section-label">CONNEXION GARMIN</p>
@@ -144,7 +144,7 @@ export default function ConnexionPage() {
     auth.key.source === "env" ? "variable d'environnement" : "fichier officiel Garmin";
 
   return (
-    <main className="shell narrow">
+    <main className="shell">
       <AppHeader />
 
       <section className="card card-primary">

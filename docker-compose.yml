@@ -1,5 +1,8 @@
 services:
   garmintogpt:
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: ghcr.io/kolokolone/garmintogpt:latest
     container_name: garmintogpt
 

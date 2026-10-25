@@ -157,7 +157,7 @@ export default function TunnelPage() {
 
   if (!config || !status) {
     return (
-      <main className="shell narrow">
+      <main className="shell">
         <AppHeader />
         <section className="card card-primary">
           <p className="section-label">TUNNEL OPENAI</p>
@@ -171,7 +171,7 @@ export default function TunnelPage() {
   const source = SOURCE_LABEL[config.source] ?? config.source;
 
   return (
-    <main className="shell narrow">
+    <main className="shell">
       <AppHeader />
 
       <section className="card card-primary">
